@@ -13,7 +13,7 @@ from ircrobots.matching import Response, ANY, Folded, SELF
 from ircrobots.glob     import Glob, compile as gcompile
 from ircchallenge       import Challenge
 
-from .common   import MaskType, User, mask_compile
+from .common   import MaskType, User, mask_compile, mask_find
 from .config   import Config
 from .database import Database
 
@@ -25,18 +25,6 @@ RPL_YOUREOPER          = "381"
 RE_CLICONN = re.compile(r"^\*{3} Notice -- Client connecting: (?P<nick>\S+) .(?P<user>[^!]+)@(?P<host>\S+). .(?P<ip>[^]]+). \S+ .(?P<real>.+).$")
 RE_CLIEXIT = re.compile(r"^\*{3} Notice -- Client exiting: (?P<nick>\S+) ")
 RE_CLINICK = re.compile(r"^\*{3} Notice -- Nick change: From (?P<old>\S+) to (?P<new>\S+) .*$")
-
-def _find_unescaped(s: str, c: str):
-    i = -1
-    while i < len(s):
-        i += 1
-        c2 = s[i]
-        if c2 == "\\":
-            i += 1
-        elif c2 == c:
-            return i
-    else:
-        return -1
 
 class Server(BaseServer):
     def __init__(self,
@@ -212,16 +200,15 @@ class Server(BaseServer):
     async def cmd_addmask(self, nick: str, args: str):
         args = args.lstrip()
         if args:
-            start = args[0]
-            end   = _find_unescaped(args[1:], start)
+            end = mask_find(args)
             if end > 0:
-                mask = args[:end+2]
+                mask = args[:end]
                 try:
                     cmask = mask_compile(mask)
                 except re.error as e:
                     return [f"regex error: {str(e)}"]
                 else:
-                    reason = args[end+2:].strip()
+                    reason = args[end:].strip()
                     if reason:
                         mask_id = await self._database.add(
                             nick, mask, reason
