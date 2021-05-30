@@ -1,0 +1,15 @@
+server: irc.libera.chat:+6697
+nickname: jmasks
+password: jmasks:hunter2
+channel: "#libera-masks"
+
+sasl:
+  username: jmasks
+  password: hunter3
+
+oper:
+  name: jmasks
+  file: ~/libera.key
+  pass: hunter4
+
+database: ~/.masks.db
