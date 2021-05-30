@@ -106,7 +106,10 @@ class Server(BaseServer):
         if mask_id is not None:
             _, d = await self._database.get(mask_id)
 
-            ban = f"KLINE 1440 *@{user.ip} :{d.reason}"
+            ident = user.user
+            if ident.startswith("~"):
+                ident = "*":
+            ban = f"KLINE 1440 {ident}@{user.ip} :{d.reason}"
             if d.type == MaskType.LETHAL:
                 await self.send_raw(ban)
             elif d.type == MaskType.DLETHAL:
