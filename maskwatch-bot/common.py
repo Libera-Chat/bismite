@@ -38,7 +38,7 @@ def mask_compile(pattern: str) -> Pattern:
     return re.compile(pattern, flags)
 
 def _find_unescaped(s: str, c: str):
-    i = -1
+    i = 0
     while i < len(s):
         i += 1
         c2 = s[i]
