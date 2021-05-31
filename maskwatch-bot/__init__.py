@@ -204,7 +204,7 @@ class Server(BaseServer):
         if args:
             end = mask_find(args)
             if end > 0:
-                mask = args[:end]
+                mask = format_strip(args[:end])
                 try:
                     cmask = mask_compile(mask)
                 except re.error as e:
@@ -281,7 +281,7 @@ class Server(BaseServer):
             mask, d = await self._database.get(mask_id)
             out = (
                 f"{str(mask_id).rjust(3)}: "
-                f"{mask} "
+                f"\x02{mask}\x02 "
                 f"({d.hits} hits) "
                 f"{d.type.name} "
                 f"[{d.reason or ''}]"
