@@ -107,7 +107,7 @@ class Server(BaseServer):
 
             ident = user.user
             if ident.startswith("~"):
-                ident = "*":
+                ident = "*"
             ban = f"KLINE 1440 {ident}@{user.ip} :{d.reason}"
             if d.type == MaskType.LETHAL:
                 await self.send_raw(ban)
