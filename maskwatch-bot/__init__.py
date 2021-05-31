@@ -1,17 +1,16 @@
-import asyncio, ipaddress, re
+import asyncio, re
 from collections import deque
 from time        import monotonic
-from typing      import Deque, Dict, List, Optional, Set, Tuple
+from typing      import Deque, Dict, List, Optional, Tuple
 
 from irctokens import build, Line
 from ircrobots import Bot as BaseBot
 from ircrobots import Server as BaseServer
-from ircrobots import ConnectionParams
 
-from ircstates.numerics import *
-from ircrobots.matching import Response, ANY, Folded, SELF
-from ircrobots.glob     import Glob, compile as gcompile
-from ircchallenge       import Challenge
+from ircstates.numerics   import *
+from ircrobots.matching   import Response, ANY, Folded, SELF
+from ircchallenge         import Challenge
+from ircrobots.formatting import strip as format_strip
 
 from .common   import MaskType, User, mask_compile, mask_find
 from .config   import Config
