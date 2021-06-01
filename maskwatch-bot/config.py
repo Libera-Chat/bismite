@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from os.path     import expanduser
 from re          import compile as re_compile
-from typing      import List, Pattern, Tuple
+from typing      import Dict, List, Pattern, Tuple
 
 import yaml
 
@@ -13,11 +13,12 @@ class Config(object):
     realname: str
     password: str
     channel:  str
+    database: str
 
     sasl: Tuple[str, str]
     oper: Tuple[str, str]
 
-    database: str
+    reasons: Dict[str, str]
 
 def load(filepath: str):
     with open(filepath) as file:
@@ -45,7 +46,8 @@ def load(filepath: str):
         config_yaml.get("realname", nickname),
         config_yaml["password"],
         config_yaml["channel"],
+        expanduser(config_yaml["database"]),
         (config_yaml["sasl"]["username"], config_yaml["sasl"]["password"]),
         (oper_name, oper_file, oper_pass),
-        expanduser(config_yaml["database"])
+        config_yaml.get("reasons", {})
     )

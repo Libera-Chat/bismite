@@ -13,4 +13,6 @@ oper:
   file: ~/libera.key
   pass: hunter4
 
-database: ~/.masks.db
+reasons:
+  tos:  "You have violated Libera Chat's terms of service. Email bans@libera.chat with questions."
+  spam: "Spam is not welcome on Libera Chat. Email bans@libera.chat with questions."

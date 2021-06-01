@@ -107,10 +107,23 @@ class Server(BaseServer):
         if mask_id is not None:
             _, d = await self._database.masks.get(mask_id)
 
-            ident = user.user
+            ident  = user.user
             if ident.startswith("~"):
                 ident = "*"
-            ban = f"KLINE 1440 {ident}@{user.ip} :{d.reason}"
+
+            reason = d.reason.lstrip()
+            if reason.startswith("$"):
+                reason, sep, oreason = reason.partition("|")
+                reason_name = reason.rstrip()[1:]
+                if not reason_name in self._config.reasons:
+                    raise ValueError(
+                        f"unrecognised reason alias {reason_name}"
+                    )
+
+                reason  = self._config.reasons[reason_name]
+                reason += sep + oreason
+
+            ban = f"KLINE 1440 {ident}@{user.ip} :{reason}"
             if d.type == MaskType.LETHAL:
                 await self.send_raw(ban)
             elif d.type == MaskType.DLETHAL:
@@ -308,4 +321,3 @@ class Bot(BaseBot):
 
     def create_server(self, name: str):
         return Server(self, name, self._config)
-
