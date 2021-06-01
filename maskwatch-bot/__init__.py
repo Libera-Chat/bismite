@@ -103,7 +103,7 @@ class Server(BaseServer):
 
         mask_id = await self._mask_match(nick, user)
         if mask_id is not None:
-            _, d = await self._database.get(mask_id)
+            _, d = await self._database.masks.get(mask_id)
 
             ident = user.user
             if ident.startswith("~"):
@@ -114,7 +114,7 @@ class Server(BaseServer):
             elif d.type == MaskType.DLETHAL:
                 self.delayed_send.append((monotonic(), ban))
 
-            await self._database.hit(mask_id)
+            await self._database.masks.hit(mask_id)
             await self.send(build("PRIVMSG", [
                 self._config.channel,
                 (
@@ -126,7 +126,7 @@ class Server(BaseServer):
     async def line_read(self, line: Line):
         if line.command == RPL_WELCOME:
             self._compiled_masks.clear()
-            for mask_id, mask in await self._database.list_enabled():
+            for mask_id, mask in await self._database.masks.list_enabled():
                 cmask = mask_compile(mask)
                 self._compiled_masks.append((mask_id, cmask))
 
@@ -212,7 +212,7 @@ class Server(BaseServer):
                 else:
                     reason = args[end:].strip()
                     if reason:
-                        mask_id = await self._database.add(
+                        mask_id = await self._database.masks.add(
                             nick, mask, reason
                         )
                         self._compiled_masks.append((mask_id, cmask))
@@ -228,12 +228,12 @@ class Server(BaseServer):
         mask_id_s = args.split(None, 1)[0]
         if mask_id_s.isdigit():
             mask_id = int(mask_id_s)
-            if await self._database.has_id(mask_id):
-                enabled   = await self._database.toggle(nick, mask_id)
+            if await self._database.masks.has_id(mask_id):
+                enabled   = await self._database.masks.toggle(nick, mask_id)
                 enabled_s = "enabled" if enabled else "disabled"
 
                 if enabled:
-                    mask, _ = await self._database.get(mask_id)
+                    mask, _ = await self._database.masks.get(mask_id)
                     cmask   = mask_compile(mask)
                     self._compiled_masks.append((mask_id, cmask))
                     self._compiled_masks.sort()
@@ -262,10 +262,12 @@ class Server(BaseServer):
         else:
             mask_id   = int(args[0])
             mask_type = MaskType[args[1].upper()]
-            if await self._database.has_id(mask_id):
-                mask, d = await self._database.get(mask_id)
+            if await self._database.masks.has_id(mask_id):
+                mask, d = await self._database.masks.get(mask_id)
                 if not d.type == mask_type:
-                    await self._database.set_type(nick, mask_id, mask_type)
+                    await self._database.masks.set_type(
+                        nick, mask_id, mask_type
+                    )
                     return [
                         f"{mask} changed from "
                         f"{d.type.name} to {mask_type.name}"
@@ -278,7 +280,7 @@ class Server(BaseServer):
     async def cmd_listmask(self, nick: str, args: str):
         outs: List[str] = []
         for mask_id, _ in self._compiled_masks:
-            mask, d = await self._database.get(mask_id)
+            mask, d = await self._database.masks.get(mask_id)
             out = (
                 f"{str(mask_id).rjust(3)}: "
                 f"\x02{mask}\x02 "

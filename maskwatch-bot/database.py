@@ -24,16 +24,17 @@ from .common import MaskDetails, MaskType
 #   time:    int not null
 #   change:  str not null
 
-class Database(object):
-    def __init__(self, location: str):
-        self._location = location
+class Table(object):
+    def __init__(self, db_location: str):
+        self._db_location = db_location
 
+class Masks(Table):
     async def add(self,
             by:     str,
             mask:   str,
             reason: Optional[str]):
 
-        async with aiosqlite.connect(self._location) as db:
+        async with aiosqlite.connect(self._db_location) as db:
             await db.execute("""
                 INSERT INTO masks (mask, type, enabled, reason, hits)
                 VALUES (?, ?, 1, ?, 0)
@@ -57,7 +58,7 @@ class Database(object):
             return mask_id
 
     async def has_id(self, mask_id: int) -> bool:
-        async with aiosqlite.connect(self._location) as db:
+        async with aiosqlite.connect(self._db_location) as db:
             cursor = await db.execute("""
                 SELECT 1
                 FROM masks
@@ -69,7 +70,7 @@ class Database(object):
             mask_id: int
             ) -> Tuple[str, MaskDetails]:
 
-        async with aiosqlite.connect(self._location) as db:
+        async with aiosqlite.connect(self._db_location) as db:
             cursor = await db.execute("""
                 SELECT mask, type, enabled, reason, hits, last_hit
                 FROM masks
@@ -92,7 +93,7 @@ class Database(object):
             mask_id: int
             ) -> bool:
 
-        async with aiosqlite.connect(self._location) as db:
+        async with aiosqlite.connect(self._db_location) as db:
             cursor = await db.execute("""
                 SELECT enabled
                 FROM masks
@@ -118,7 +119,7 @@ class Database(object):
             by:        str,
             mask_id:   int,
             mask_type: MaskType):
-        async with aiosqlite.connect(self._location) as db:
+        async with aiosqlite.connect(self._db_location) as db:
             await db.execute("""
                 UPDATE masks
                 SET type=?
@@ -131,7 +132,7 @@ class Database(object):
             await db.commit()
 
     async def hit(self, mask_id: int):
-        async with aiosqlite.connect(self._location) as db:
+        async with aiosqlite.connect(self._db_location) as db:
             cursor = await db.execute("""
                 SELECT hits
                 FROM masks
@@ -147,7 +148,7 @@ class Database(object):
 
     async def list_enabled(self
             ) -> List[Tuple[int, str]]:
-        async with aiosqlite.connect(self._location) as db:
+        async with aiosqlite.connect(self._db_location) as db:
             cursor = await db.execute("""
                 SELECT id, mask
                 FROM masks
@@ -155,3 +156,7 @@ class Database(object):
                 ORDER BY id ASC
             """)
             return await cursor.fetchall()
+
+class Database(object):
+    def __init__(self, location: str):
+        self.masks = Masks(location)

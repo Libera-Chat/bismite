@@ -2,6 +2,7 @@ server: irc.libera.chat:+6697
 nickname: jmasks
 password: jmasks:hunter2
 channel: "#libera-masks"
+database: ~/.masks.db
 
 sasl:
   username: jmasks
