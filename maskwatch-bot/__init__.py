@@ -88,10 +88,12 @@ class Server(BaseServer):
             user: User
             ) -> Optional[int]:
 
-        references = [
-            f"{nick}!{user.user}@{user.host} {user.real}"
-            f"{nick}!{user.user}@{user.ip} {user.real}"
-        ]
+        ref_host   = f"{nick}!{user.user}@{user.host} {user.real}"
+        ref_ip     = f"{nick}!{user.user}@{user.ip} {user.real}"
+        references = [ref_host]
+        if not ref_host == ref_ip:
+            references.append(ref_ip)
+
         for mask_id, pattern in self._compiled_masks:
             for ref in references:
                 if pattern.search(ref):
