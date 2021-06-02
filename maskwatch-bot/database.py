@@ -157,6 +157,18 @@ class Masks(Table):
             """)
             return await cursor.fetchall()
 
+    async def history(self,
+            mask_id: int
+            ) -> List[Tuple[str, int, str]]:
+        async with aiosqlite.connect(self._db_location) as db:
+            cursor = await db.execute("""
+                SELECT by, time, change
+                FROM changes
+                WHERE mask_id=?
+                ORDER BY time
+            """, [mask_id])
+            return await cursor.fetchall()
+
 class Database(object):
     def __init__(self, location: str):
         self.masks = Masks(location)

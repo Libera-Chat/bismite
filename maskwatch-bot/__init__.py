@@ -1,5 +1,6 @@
 import asyncio, re
 from collections import deque
+from datetime    import datetime
 from time        import monotonic
 from typing      import Deque, Dict, List, Optional, Tuple
 
@@ -214,6 +215,45 @@ class Server(BaseServer):
                 for out in outs:
                     await self.send(build("NOTICE", [who, out]))
 
+    def _mask_format(self,
+            mask_id: int,
+            mask:    str,
+            details: str
+            ) -> str:
+        return (
+            f"{str(mask_id).rjust(3)}:"
+            f" \x02{mask}\x02"
+            f" ({details.hits} hits)"
+            f" {details.type.name}"
+            f" [{details.reason or ''}]"
+        )
+
+    async def cmd_getmask(self, nick: str, args: str):
+        mask_id_s = args.split(None, 1)[0]
+        if mask_id_s.isdigit():
+            mask_id = int(mask_id_s)
+            if await self._database.masks.has_id(mask_id):
+                mask, d = await self._database.masks.get(mask_id)
+                history = await self._database.masks.history(mask_id)
+
+                outs = [self._mask_format(mask_id, mask, d)]
+                if history:
+                    outs.append("\x02changes:\x02")
+                for who, ts, change in history:
+                    tss = datetime.utcfromtimestamp(ts).isoformat()
+                    outs.append(
+                        f" {tss}"
+                        f" by \x02{who}\x02:"
+                        f" {change}"
+                    )
+                return outs
+            else:
+                return [f"unknown mask id {mask_id}"]
+        elif mask_id:
+            return ["that's not an id/number"]
+        else:
+            return ["please provide a mask id"]
+
     async def cmd_addmask(self, nick: str, args: str):
         args = args.lstrip()
         if args:
@@ -296,14 +336,7 @@ class Server(BaseServer):
         outs: List[str] = []
         for mask_id, _ in self._compiled_masks:
             mask, d = await self._database.masks.get(mask_id)
-            out = (
-                f"{str(mask_id).rjust(3)}: "
-                f"\x02{mask}\x02 "
-                f"({d.hits} hits) "
-                f"{d.type.name} "
-                f"[{d.reason or ''}]"
-            )
-            outs.append(out)
+            outs.append(self._mask_format(mask_id, mask, d))
         return outs or ["no masks"]
 
     async def cmd_kcheck(self, nick: str, args: str):
