@@ -1,5 +1,7 @@
 # maskwatch-bot
 
+IRC `nick!user@host real` watcher, akin to Atheme's OperServ `RWATCH`.
+
 ## setup
 
 ```
