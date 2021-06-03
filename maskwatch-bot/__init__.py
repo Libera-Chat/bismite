@@ -339,9 +339,6 @@ class Server(BaseServer):
             outs.append(self._mask_format(mask_id, mask, d))
         return outs or ["no masks"]
 
-    async def cmd_kcheck(self, nick: str, args: str):
-        pass
-
     def line_preread(self, line: Line):
         print(f"< {line.format()}")
     def line_presend(self, line: Line):
