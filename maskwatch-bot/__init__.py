@@ -303,6 +303,8 @@ class Server(BaseServer):
                 else:
                     del self._compiled_masks[mask_id]
 
+                log = f"{nick} TOGGLEMASK: {enabled_s} mask \x02#{mask_id}\x02"
+                await self.send(build("PRIVMSG", [self._config.channel, log]))
                 return [f"mask {mask_id} {enabled_s}"]
             else:
                 return [f"unknown mask id {mask_id}"]
@@ -328,6 +330,8 @@ class Server(BaseServer):
                     await self._database.masks.set_type(
                         nick, mask_id, mask_type
                     )
+                    log = f"{nick} SETMASK: type \x02{mask_type.name}\x02 \x02{mask}\x02 (was \x02{d.type.name}\x02)"
+                    await self.send(build("PRIVMSG", [self._config.channel, log]))
                     return [
                         f"{mask} changed from "
                         f"{d.type.name} to {mask_type.name}"
