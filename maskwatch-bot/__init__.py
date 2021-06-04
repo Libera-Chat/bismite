@@ -91,9 +91,11 @@ class Server(BaseServer):
             user: User
             ) -> Optional[int]:
 
-        ref_host   = f"{nick}!{user.user}@{user.host} {user.real}"
-        ref_ip     = f"{nick}!{user.user}@{user.ip} {user.real}"
-        references = [ref_host]
+        references = [f"{nick}!{user.user}@{user.host} {user.real}"]
+        if (user.ip is not None and
+                not user.host == user.ip):
+            references.append(f"{nick}!{user.user}@{user.ip} {user.real}")
+
         if not ref_host == ref_ip:
             references.append(ref_ip)
 
@@ -174,7 +176,10 @@ class Server(BaseServer):
                 user = p_cliconn.group("user")
                 host = p_cliconn.group("host")
                 real = p_cliconn.group("real")
-                ip   = p_cliconn.group("ip")
+                ip: Optional[str] = p_cliconn.group("ip")
+
+                if ip == "0":
+                    ip = None
 
                 user = User(user, host, real, ip)
                 self._users[nick] = user
