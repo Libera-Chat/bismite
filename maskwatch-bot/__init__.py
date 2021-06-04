@@ -22,6 +22,7 @@ from .database import Database
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
 RPL_ENDOFRSACHALLENGE2 = "741"
+RPL_WHOISSPECIAL       = "320"
 RPL_YOUREOPER          = "381"
 
 RE_CLICONN = re.compile(r"^\*{3} Notice -- Client connecting: (?P<nick>\S+) .(?P<user>[^!]+)@(?P<host>\S+). .(?P<ip>[^]]+). \S+ .(?P<real>.+).$")
@@ -73,18 +74,21 @@ class Server(BaseServer):
                     await self.send(build("CHALLENGE", [f"+{retort}"]))
                     break
 
-    async def _is_oper(self, nickname: str):
+    async def _get_oper(self, nickname: str):
         await self.send(build("WHOIS", [nickname]))
 
-        whois_oper = Response(RPL_WHOISOPERATOR, [SELF, Folded(nickname)])
+        whois_oper = Response(RPL_WHOISSPECIAL, [SELF, Folded(nickname)])
         whois_end  = Response(RPL_ENDOFWHOIS,    [SELF, Folded(nickname)])
-        #:lithium.libera.chat 313 sandcat sandcat :is an IRC Operator
+        #:lithium.libera.chat 320 sandcat sandcat :is opered as sandcat, privset sandcat
         #:lithium.libera.chat 318 sandcat sandcat :End of /WHOIS list.
 
         whois_line = await self.wait_for({
             whois_end, whois_oper
         })
-        return whois_line.command == RPL_WHOISOPERATOR
+        # return the oper name or nothing
+        if whois_line.command == RPL_WHOISSPECIAL and whois_line.params[2].startswith("is opered as"):
+            return whois_line.params[2].split(",")[0].split()[-1]
+        return None
 
     async def _mask_match(self,
             nick: str,
@@ -210,10 +214,11 @@ class Server(BaseServer):
             command: str,
             args:    str):
 
-        if await self._is_oper(who):
+        opername = await self._get_oper(who)
+        if opername is not None:
             attrib  = f"cmd_{command}"
             if hasattr(self, attrib):
-                outs = await getattr(self, attrib)(who, args)
+                outs = await getattr(self, attrib)(opername, args)
                 for out in outs:
                     await self.send(build("NOTICE", [who, out]))
 
