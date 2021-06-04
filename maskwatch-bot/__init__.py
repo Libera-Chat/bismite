@@ -216,6 +216,8 @@ class Server(BaseServer):
                 outs = await getattr(self, attrib)(who, args)
                 for out in outs:
                     await self.send(build("NOTICE", [who, out]))
+            else:
+                await self.send(build("NOTICE", [who, f"\x02{command}\x02 is not a valid command"]))
 
     def _mask_format(self,
             mask_id: int,
