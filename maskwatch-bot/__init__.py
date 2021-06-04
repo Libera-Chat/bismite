@@ -96,9 +96,6 @@ class Server(BaseServer):
                 not user.host == user.ip):
             references.append(f"{nick}!{user.user}@{user.ip} {user.real}")
 
-        if not ref_host == ref_ip:
-            references.append(ref_ip)
-
         for mask_id, pattern in self._compiled_masks.items():
             for ref in references:
                 if pattern.search(ref):
