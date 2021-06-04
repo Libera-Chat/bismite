@@ -1,8 +1,10 @@
 import asyncio, re
-from collections import deque
+from collections import deque, OrderedDict
 from datetime    import datetime
 from time        import monotonic
 from typing      import Deque, Dict, List, Optional, Tuple
+from typing      import OrderedDict as TOrderedDict
+
 
 from irctokens import build, Line
 from ircrobots import Bot as BaseBot
@@ -37,7 +39,7 @@ class Server(BaseServer):
         self._database = Database(config.database)
 
         self._users:          Dict[str, User] = {}
-        self._compiled_masks: List[Tuple[int, Pattern]] = []
+        self._compiled_masks: TOrderedDict[int, Pattern] = OrderedDict()
         self.delayed_send:    Deque[Tuple[int, str]] = deque()
 
     def set_throttle(self, rate: int, time: float):
@@ -95,7 +97,7 @@ class Server(BaseServer):
         if not ref_host == ref_ip:
             references.append(ref_ip)
 
-        for mask_id, pattern in self._compiled_masks:
+        for mask_id, pattern in self._compiled_masks.items():
             for ref in references:
                 if pattern.search(ref):
                     return mask_id
@@ -144,7 +146,7 @@ class Server(BaseServer):
             self._compiled_masks.clear()
             for mask_id, mask in await self._database.masks.list_enabled():
                 cmask = mask_compile(mask)
-                self._compiled_masks.append((mask_id, cmask))
+                self._compiled_masks[mask_id] = cmask
 
             await self.send(build("MODE", [self.nickname, "+g"]))
             oper_name, oper_file, oper_pass = self._config.oper
@@ -270,7 +272,7 @@ class Server(BaseServer):
                         mask_id = await self._database.masks.add(
                             nick, mask, reason
                         )
-                        self._compiled_masks.append((mask_id, cmask))
+                        self._compiled_masks[mask_id] = cmask
                         return [f"added {mask_id}"]
                     else:
                         return ["please provide a reason"]
@@ -290,13 +292,12 @@ class Server(BaseServer):
                 if enabled:
                     mask, _ = await self._database.masks.get(mask_id)
                     cmask   = mask_compile(mask)
-                    self._compiled_masks.append((mask_id, cmask))
-                    self._compiled_masks.sort()
+                    self._compiled_masks[mask_id] = cmask
+                    self._compiled_masks = OrderedDict(
+                        sorted(self._compiled_masks.items())
+                    )
                 else:
-                    for i, (cmask_id, _) in enumerate(self._compiled_masks):
-                        if cmask_id == mask_id:
-                            self._compiled_masks.pop(i)
-                            break
+                    del self._compiled_masks[mask_id]
 
                 return [f"mask {mask_id} {enabled_s}"]
             else:
@@ -334,7 +335,7 @@ class Server(BaseServer):
 
     async def cmd_listmask(self, nick: str, args: str):
         outs: List[str] = []
-        for mask_id, _ in self._compiled_masks:
+        for mask_id, _ in self._compiled_masks.items():
             mask, d = await self._database.masks.get(mask_id)
             outs.append(self._mask_format(mask_id, mask, d))
         return outs or ["no masks"]
