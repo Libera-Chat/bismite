@@ -19,7 +19,7 @@ $ python3 -m maskwatch-bot config.yaml
 ## quick usage examples
 
 ```
-<jess> addmask /^jesstest!/ $spam|!dnsbl
+<jess> addmask /^jesstest!/ Please do not spam|!dnsbl
 -bismite- added 1
 <jess> listmask
 -bismite-   1: /^jesstest!/ (0 hits) WARN [$spam|!dnsbl]
@@ -30,6 +30,25 @@ $ python3 -m maskwatch-bot config.yaml
 -bismite- changes:
 -bismite-  2021-06-03T19:01:02 by jess: add
 -bismite-  2021-06-03T19:01:10 by jess: type LETHAL
+```
+
+## commands
+
+### ADDMASK
+```
+/msg bismite addmask /<regex>/ <reason>[|<oper reason>]
+```
+
+delimiters on `/<regex>/` can be any non-alphanumeric character, e.g. `,<regex>,`
+
+### SETMASK
+```
+/msg bismite setmask <id> <WARN|LETHAL|DLETHAL>
+```
+
+### TOGGLEMASK
+```
+/msg bismite togglemask <id>
 ```
 
 ## mask types
