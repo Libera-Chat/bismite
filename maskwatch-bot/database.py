@@ -30,7 +30,8 @@ class Table(object):
 
 class Masks(Table):
     async def add(self,
-            by:     str,
+            by_nick:     str,
+            by_oper: Optional[str],
             mask:   str,
             reason: Optional[str]):
 
@@ -50,9 +51,9 @@ class Masks(Table):
             mask_id = (await cursor.fetchone())[0]
 
             await db.execute("""
-                INSERT INTO changes (mask_id, by, time, change)
-                VALUES (?, ?, ?, ?)
-            """, [mask_id, by, int(time()), 'add'])
+                INSERT INTO changes (mask_id, by_nick, by_oper, time, change)
+                VALUES (?, ?, ?, ?, ?)
+            """, [mask_id, by_nick, by_oper, int(time()), 'add'])
             await db.commit()
 
             return mask_id
@@ -89,7 +90,8 @@ class Masks(Table):
             return (mask, details)
 
     async def toggle(self,
-            by:      str,
+            by_nick: str,
+            by_oper: Optional[str],
             mask_id: int
             ) -> bool:
 
@@ -108,15 +110,16 @@ class Masks(Table):
                 WHERE id=?
             """, [enabled, mask_id])
             await db.execute("""
-                INSERT INTO changes (mask_id, by, time, change)
-                VALUES (?, ?, ?, ?)
-            """, [mask_id, by, int(time()), f'enabled {enabled}'])
+                INSERT INTO changes (mask_id, by_nick, by_oper, time, change)
+                VALUES (?, ?, ?, ?, ?)
+            """, [mask_id, by_nick, by_oper, int(time()), f'enabled {enabled}'])
             await db.commit()
 
             return enabled
 
     async def set_type(self,
-            by:        str,
+            by_nick:   str,
+            by_oper:   Optional[str],
             mask_id:   int,
             mask_type: MaskType):
         async with aiosqlite.connect(self._db_location) as db:
@@ -126,9 +129,9 @@ class Masks(Table):
                 WHERE id=?
             """, [mask_type.value, mask_id])
             await db.execute("""
-                INSERT INTO changes (mask_id, by, time, change)
-                VALUES (?, ?, ?, ?)
-            """, [mask_id, by, int(time()), f'type {mask_type.name}'])
+                INSERT INTO changes (mask_id, by_nick, by_oper, time, change)
+                VALUES (?, ?, ?, ?, ?)
+            """, [mask_id, by_nick, by_oper, int(time()), f'type {mask_type.name}'])
             await db.commit()
 
     async def hit(self, mask_id: int):
@@ -162,7 +165,7 @@ class Masks(Table):
             ) -> List[Tuple[str, int, str]]:
         async with aiosqlite.connect(self._db_location) as db:
             cursor = await db.execute("""
-                SELECT by, time, change
+                SELECT by_nick, by_oper, time, change
                 FROM changes
                 WHERE mask_id=?
                 ORDER BY time

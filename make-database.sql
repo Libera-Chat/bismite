@@ -11,7 +11,8 @@ CREATE TABLE masks (
 );
 CREATE TABLE changes (
     mask_id INTEGER NOT NULL,
-    by      TEXT NOT NULL,
+    by_nick TEXT NOT NULL,
+    by_oper TEXT,
     time    INTEGER NOT NULL,
     change  TEXT NOT NULL
 );

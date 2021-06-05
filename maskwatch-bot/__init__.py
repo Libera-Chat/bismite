@@ -216,9 +216,10 @@ class Server(BaseServer):
 
         opername = await self._get_oper(who)
         if opername is not None:
+            opername = None if opername == "<grant>" else opername
             attrib  = f"cmd_{command}"
             if hasattr(self, attrib):
-                outs = await getattr(self, attrib)(opername, args)
+                outs = await getattr(self, attrib)(opername, who, args)
                 for out in outs:
                     await self.send(build("NOTICE", [who, out]))
 
@@ -235,7 +236,7 @@ class Server(BaseServer):
             f" [{details.reason or ''}]"
         )
 
-    async def cmd_getmask(self, nick: str, args: str):
+    async def cmd_getmask(self, oper: Optional[str], nick: str, args: str):
         mask_id_s = args.split(None, 1)[0]
         if mask_id_s.isdigit():
             mask_id = int(mask_id_s)
@@ -246,7 +247,11 @@ class Server(BaseServer):
                 outs = [self._mask_format(mask_id, mask, d)]
                 if history:
                     outs.append("\x02changes:\x02")
-                for who, ts, change in history:
+                for who_nick, who_oper, ts, change in history:
+                    if who_oper is not None:
+                        who = f"{who_nick} ({who_oper})"
+                    else:
+                        who = f"{who_nick}"
                     tss = datetime.utcfromtimestamp(ts).isoformat()
                     outs.append(
                         f" {tss}"
@@ -261,7 +266,7 @@ class Server(BaseServer):
         else:
             return ["please provide a mask id"]
 
-    async def cmd_addmask(self, nick: str, args: str):
+    async def cmd_addmask(self, oper: Optional[str], nick: str, args: str):
         args = args.lstrip()
         if args:
             end = mask_find(args)
@@ -275,7 +280,7 @@ class Server(BaseServer):
                     reason = args[end:].strip()
                     if reason:
                         mask_id = await self._database.masks.add(
-                            nick, mask, reason
+                            nick, oper, mask, reason
                         )
                         self._compiled_masks[mask_id] = cmask
                         return [f"added {mask_id}"]
@@ -286,12 +291,12 @@ class Server(BaseServer):
         else:
             return ["no args provided"]
 
-    async def cmd_togglemask(self, nick: str, args: str):
+    async def cmd_togglemask(self, oper: Optional[str], nick: str, args: str):
         mask_id_s = args.split(None, 1)[0]
         if mask_id_s.isdigit():
             mask_id = int(mask_id_s)
             if await self._database.masks.has_id(mask_id):
-                enabled   = await self._database.masks.toggle(nick, mask_id)
+                enabled   = await self._database.masks.toggle(nick, oper, mask_id)
                 enabled_s = "enabled" if enabled else "disabled"
 
                 if enabled:
@@ -312,7 +317,7 @@ class Server(BaseServer):
         else:
             return ["please provide a mask id"]
 
-    async def cmd_setmask(self, nick: str, sargs: str):
+    async def cmd_setmask(self, oper: Optional[str], nick: str, sargs: str):
         args = sargs.split()
         if len(args) < 2:
             return ["not enough params"]
@@ -327,7 +332,7 @@ class Server(BaseServer):
                 mask, d = await self._database.masks.get(mask_id)
                 if not d.type == mask_type:
                     await self._database.masks.set_type(
-                        nick, mask_id, mask_type
+                        nick, oper, mask_id, mask_type
                     )
                     return [
                         f"{mask} changed from "
@@ -338,7 +343,7 @@ class Server(BaseServer):
             else:
                 return [f"unknown mask id {mask_id}"]
 
-    async def cmd_listmask(self, nick: str, args: str):
+    async def cmd_listmask(self, oper: Optional[str], nick: str, args: str):
         outs: List[str] = []
         for mask_id, _ in self._compiled_masks.items():
             mask, d = await self._database.masks.get(mask_id)
