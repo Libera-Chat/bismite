@@ -330,7 +330,7 @@ class Server(BaseServer):
                     await self._database.masks.set_type(
                         nick, mask_id, mask_type
                     )
-                    log = f"{nick} SETMASK: type \x02{mask_type.name}\x02 \x02{mask}\x02 (was \x02{d.type.name}\x02)"
+                    log = f"{nick} SETMASK: type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
                     await self.send(build("PRIVMSG", [self._config.channel, log]))
                     return [
                         f"{mask} changed from "
