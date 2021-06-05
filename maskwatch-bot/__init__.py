@@ -40,7 +40,11 @@ class Server(BaseServer):
 
         self._users:          Dict[str, User] = {}
         self._compiled_masks: TOrderedDict[int, Pattern] = OrderedDict()
-        self.delayed_send:    Deque[Tuple[int, str]] = deque()
+
+        self.delayed_send: Deque[Tuple[int, str]] = deque()
+
+        self.to_check:      Deque[Tuple[float, str, User]] = deque()
+        self.to_check_nick: Dict[str, int] = {}
 
     def set_throttle(self, rate: int, time: float):
         # turn off throttling
@@ -101,7 +105,7 @@ class Server(BaseServer):
                 if pattern.search(ref):
                     return mask_id
 
-    async def _mask_check(self,
+    async def mask_check(self,
             nick: str,
             user: User):
 
@@ -180,12 +184,19 @@ class Server(BaseServer):
 
                 user = User(user, host, real, ip)
                 self._users[nick] = user
-                await self._mask_check(nick, user)
+
+                self.to_check.append((monotonic(), nick, user))
+                self.to_check_nick[nick] = len(self.to_check)-1
 
             elif p_cliexit is not None:
                 nick = p_cliexit.group("nick")
                 if nick in self._users:
                     del self._users[nick]
+
+                if nick in self.to_check_nick:
+                    idx = self.to_check_nick.pop(nick)
+                    ts, _, user = self.to_check[idx]
+                    self.to_check[idx] = (-1, nick, user)
 
             elif p_clinick is not None:
                 old_nick = p_clinick.group("old")
@@ -194,6 +205,12 @@ class Server(BaseServer):
                 if old_nick in self._users:
                     user = self._users.pop(old_nick)
                     self._users[new_nick] = user
+                if old_nick in self.to_check_nick:
+                    idx = self.to_check_nick.pop(old_nick)
+                    _1, _2, user = self.to_check[idx]
+
+                    self.to_check.append((monotonic(), new_nick, user))
+                    self.to_check_nick[new_nick] = len(self.to_check)-1
 
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and

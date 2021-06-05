@@ -14,8 +14,6 @@ from .database import Database
 SEND_DELAY = 10.0
 
 async def delayed_send(bot: Bot):
-    start = monotonic()
-
     while True:
         now  = monotonic()
         next = SEND_DELAY - (now%SEND_DELAY)
@@ -31,3 +29,29 @@ async def delayed_send(bot: Bot):
                     await server.send_raw(sline)
                 else:
                     break
+
+async def delayed_check(
+        bot:   Bot,
+        delay: int=3):
+
+    while True:
+        now  = monotonic()
+        wait = 0.1
+
+        if bot.servers:
+            server = list(bot.servers.values())[0]
+            while server.to_check:
+                ts, nick, user = server.to_check[0]
+                due = ts+delay
+
+                if ts == -1:
+                    server.to_check.popleft()
+                elif due <= now:
+                    server.to_check.popleft()
+                    del server.to_check_nick[nick]
+                    await server.mask_check(nick, user)
+                else:
+                    wait = due-now
+                    break
+
+        await asyncio.sleep(wait)
