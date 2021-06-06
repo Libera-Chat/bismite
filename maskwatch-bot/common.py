@@ -16,9 +16,10 @@ class MaskType(IntEnum):
     WARN    = 1
     LETHAL  = 2
     DLETHAL = 3
+    EXCLUDE = 4
 
     def __contains__(self, name: str):
-        return name in {"LETHAL", "WARN", "DLETHAL"}
+        return name in {"WARN", "LETHAL", "DLETHAL", "EXCLUDE"}
 
 class Event(Enum):
     CONNECT = 1
