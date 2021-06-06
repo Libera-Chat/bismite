@@ -43,7 +43,7 @@ delimiters on `/<regex>/` can be any non-alphanumeric character, e.g. `,<regex>,
 
 ### SETMASK
 ```
-/msg bismite setmask <id> <WARN|LETHAL|DLETHAL>
+/msg bismite setmask <id> WARN|LETHAL|DLETHAL|EXCLUDE
 ```
 
 ### TOGGLEMASK
@@ -65,3 +65,8 @@ Same as warn, but also k-lines the user.
 ### DLETHAL
 
 Same as lethal, but the k-line is delayed a bit.
+
+### EXCLUDE
+
+Same as `WARN`, but is seen as more "important" than other mask types, and
+will thus prevent people matching it from matching e.g. `LETHAL` masks.
