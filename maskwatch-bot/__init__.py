@@ -24,9 +24,9 @@ RPL_RSACHALLENGE2      = "740"
 RPL_ENDOFRSACHALLENGE2 = "741"
 RPL_YOUREOPER          = "381"
 
-RE_CLICONN = re.compile(r"^\*{3} Notice -- Client connecting: (?P<nick>\S+) .(?P<user>[^!]+)@(?P<host>\S+). .(?P<ip>[^]]+). \S+ .(?P<real>.+).$")
-RE_CLIEXIT = re.compile(r"^\*{3} Notice -- Client exiting: (?P<nick>\S+) ")
-RE_CLINICK = re.compile(r"^\*{3} Notice -- Nick change: From (?P<old>\S+) to (?P<new>\S+) .*$")
+RE_CLICONN = re.compile(r"^:[^!]+ NOTICE \* :\*{3} Notice -- Client connecting: (?P<nick>\S+) .(?P<user>[^!]+)@(?P<host>\S+). .(?P<ip>[^]]+). \S+ .(?P<real>.+).$")
+RE_CLIEXIT = re.compile(r"^:[^!]+ NOTICE \* :\*{3} Notice -- Client exiting: (?P<nick>\S+) ")
+RE_CLINICK = re.compile(r"^:[^!]+ NOTICE \* :\*{3} Notice -- Nick change: From (?P<old>\S+) to (?P<new>\S+) .*$")
 
 class Server(BaseServer):
     def __init__(self,
@@ -50,11 +50,10 @@ class Server(BaseServer):
         # turn off throttling
         pass
 
-    async def _oper_up(self,
+    async def _oper_challenge(self,
             oper_name: str,
             oper_file: str,
             oper_pass: str):
-
         try:
             challenge = Challenge(keyfile=oper_file, password=oper_pass)
         except Exception:
@@ -76,6 +75,16 @@ class Server(BaseServer):
                     retort = challenge.finalise()
                     await self.send(build("CHALLENGE", [f"+{retort}"]))
                     break
+
+    async def _oper_up(self,
+            oper_name: str,
+            oper_pass: str,
+            oper_file: Optional[str]):
+
+        if oper_file is not None:
+            await self._oper_challenge(oper_name, oper_file, oper_pass)
+        else:
+            await self.send(build("OPER", [oper_name, oper_pass]))
 
     async def _is_oper(self, nickname: str):
         await self.send(build("WHOIS", [nickname]))
@@ -174,8 +183,8 @@ class Server(BaseServer):
                 self._compiled_masks[mask_id] = (cmask, flags)
 
             await self.send(build("MODE", [self.nickname, "+g"]))
-            oper_name, oper_file, oper_pass = self._config.oper
-            await self._oper_up(oper_name, oper_file, oper_pass)
+            oper_name, oper_pass, oper_file = self._config.oper
+            await self._oper_up(oper_name, oper_pass, oper_file)
 
         elif line.command == RPL_YOUREOPER:
             # F far cliconn
@@ -183,23 +192,32 @@ class Server(BaseServer):
             # n nick changes
             await self.send(build("MODE", [self.nickname, "-s+s", "+Fcn"]))
 
-        elif (line.command == "NOTICE" and
-                line.params[0] == "*" and
-                line.source is not None and
-                not "!" in line.source):
+        elif (line.command == "PRIVMSG" and
+                not self.is_me(line.hostmask.nickname) and
+                self.is_me(line.params[0])):
 
-            # snote!
+            # private message
 
-            p_cliconn = RE_CLICONN.search(line.params[1])
-            p_cliexit = RE_CLIEXIT.search(line.params[1])
-            p_clinick = RE_CLINICK.search(line.params[1])
+            out = f"[PV] <{line.source}> {line.params[1]}"
+            await self.send(build("PRIVMSG", [self._config.channel, out]))
+
+            cmd, _, args = line.params[1].partition(" ")
+            await self.cmd(line.hostmask.nickname, cmd.lower(), args)
+
+        else:
+
+            rawline   = line.format()
+            p_cliconn = RE_CLICONN.search(rawline)
+            p_cliexit = RE_CLIEXIT.search(rawline)
+            p_clinick = RE_CLINICK.search(rawline)
 
             if p_cliconn is not None:
                 nick = p_cliconn.group("nick")
                 user = p_cliconn.group("user")
                 host = p_cliconn.group("host")
                 real = p_cliconn.group("real")
-                ip: Optional[str] = p_cliconn.group("ip")
+                # the regex might not have an `ip` group
+                ip: Optional[str] = p_cliconn.groupdict().get("ip", None)
 
                 if ip == "0":
                     # remote i-line spoof
@@ -230,18 +248,6 @@ class Server(BaseServer):
                     self.to_check.append(
                         (monotonic(), new_nick, user, Event.NICK)
                     )
-
-        elif (line.command == "PRIVMSG" and
-                not self.is_me(line.hostmask.nickname) and
-                self.is_me(line.params[0])):
-
-            # private message
-
-            out = f"[PV] <{line.source}> {line.params[1]}"
-            await self.send(build("PRIVMSG", [self._config.channel, out]))
-
-            cmd, _, args = line.params[1].partition(" ")
-            await self.cmd(line.hostmask.nickname, cmd.lower(), args)
 
     async def cmd(self,
             who:     str,
