@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 from enum        import Enum
-from typing      import Pattern, Optional
+from typing      import Pattern, Optional, Tuple
 
 @dataclass
 class User(object):
@@ -29,7 +29,9 @@ class MaskDetails(object):
     last_hit: Optional[int]
 
 
-def mask_compile(pattern: str) -> Pattern:
+def mask_compile(
+        pattern: str
+        ) -> Tuple[Pattern, str]:
     p, sflags = pattern.rsplit(pattern[0], 1)
     pattern   = p[1:]
 
@@ -37,7 +39,7 @@ def mask_compile(pattern: str) -> Pattern:
     if "i" in sflags:
         flags |= re.I
 
-    return re.compile(pattern, flags)
+    return re.compile(pattern, flags), sflags
 
 def _find_unescaped(s: str, c: str):
     i = 0

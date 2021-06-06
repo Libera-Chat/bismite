@@ -39,7 +39,8 @@ class Server(BaseServer):
         self._database = Database(config.database)
 
         self._users:          Dict[str, User] = {}
-        self._compiled_masks: TOrderedDict[int, Pattern] = OrderedDict()
+        self._compiled_masks: TOrderedDict[int, Tuple[Pattern, str]] \
+            = OrderedDict()
 
         self.delayed_send: Deque[Tuple[int, str]] = deque()
 
@@ -101,7 +102,7 @@ class Server(BaseServer):
             # also match against that IP
             references.append(f"{nick}!{user.user}@{user.ip} {user.real}")
 
-        for mask_id, pattern in self._compiled_masks.items():
+        for mask_id, (pattern, flags) in self._compiled_masks.items():
             for ref in references:
                 if pattern.search(ref):
                     return mask_id
@@ -155,8 +156,8 @@ class Server(BaseServer):
             self._compiled_masks.clear()
             # load and compile all masks
             for mask_id, mask in await self._database.masks.list_enabled():
-                cmask = mask_compile(mask)
-                self._compiled_masks[mask_id] = cmask
+                cmask, flags = mask_compile(mask)
+                self._compiled_masks[mask_id] = (cmask, flags)
 
             await self.send(build("MODE", [self.nickname, "+g"]))
             oper_name, oper_file, oper_pass = self._config.oper
@@ -287,7 +288,7 @@ class Server(BaseServer):
             if end > 0:
                 mask = format_strip(args[:end])
                 try:
-                    cmask = mask_compile(mask)
+                    cmask, flags = mask_compile(mask)
                 except re.error as e:
                     return [f"regex error: {str(e)}"]
                 else:
@@ -296,7 +297,7 @@ class Server(BaseServer):
                         mask_id = await self._database.masks.add(
                             nick, mask, reason
                         )
-                        self._compiled_masks[mask_id] = cmask
+                        self._compiled_masks[mask_id] = (cmask, flags)
                         return [f"added {mask_id}"]
                     else:
                         return ["please provide a reason"]
@@ -314,9 +315,9 @@ class Server(BaseServer):
                 enabled_s = "enabled" if enabled else "disabled"
 
                 if enabled:
-                    mask, _ = await self._database.masks.get(mask_id)
-                    cmask   = mask_compile(mask)
-                    self._compiled_masks[mask_id] = cmask
+                    mask, _      = await self._database.masks.get(mask_id)
+                    cmask, flags = mask_compile(mask)
+                    self._compiled_masks[mask_id] = (cmask, flags)
                     self._compiled_masks = OrderedDict(
                         sorted(self._compiled_masks.items())
                     )
