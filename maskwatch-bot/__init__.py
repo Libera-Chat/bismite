@@ -197,7 +197,8 @@ class Server(BaseServer):
                 user = p_cliconn.group("user")
                 host = p_cliconn.group("host")
                 real = p_cliconn.group("real")
-                ip: Optional[str] = p_cliconn.group("ip")
+                # the regex might not have an `ip` group
+                ip: Optional[str] = p_cliconn.groupdict().get("ip", None)
 
                 if ip == "0":
                     # remote i-line spoof
