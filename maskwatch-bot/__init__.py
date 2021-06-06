@@ -97,6 +97,8 @@ class Server(BaseServer):
         references = [f"{nick}!{user.user}@{user.host} {user.real}"]
         if (user.ip is not None and
                 not user.host == user.ip):
+            # if the user has an IP and it doesn't match their visible 'host',
+            # also match against that IP
             references.append(f"{nick}!{user.user}@{user.ip} {user.real}")
 
         for mask_id, pattern in self._compiled_masks.items():
@@ -113,11 +115,15 @@ class Server(BaseServer):
             _, d = await self._database.masks.get(mask_id)
 
             ident  = user.user
+            # if the user doesn't have identd, bin the whole host
             if ident.startswith("~"):
                 ident = "*"
 
             reason = d.reason.lstrip()
+            # if the user-facing bit is `$thing`, see if `thing` is a known
+            # reason alias
             if reason.startswith("$"):
+                # split off |oper reason
                 reason, sep, oreason = reason.partition("|")
                 reason_name = reason.rstrip()[1:]
                 if not reason_name in self._config.reasons:
@@ -126,6 +132,7 @@ class Server(BaseServer):
                     )
 
                 reason  = self._config.reasons[reason_name]
+                # reattach |oper reason
                 reason += sep + oreason
 
             ban = f"KLINE 1440 {ident}@{user.ip} :{reason}"
@@ -146,6 +153,7 @@ class Server(BaseServer):
     async def line_read(self, line: Line):
         if line.command == RPL_WELCOME:
             self._compiled_masks.clear()
+            # load and compile all masks
             for mask_id, mask in await self._database.masks.list_enabled():
                 cmask = mask_compile(mask)
                 self._compiled_masks[mask_id] = cmask
@@ -179,9 +187,11 @@ class Server(BaseServer):
                 ip: Optional[str] = p_cliconn.group("ip")
 
                 if ip == "0":
+                    # remote i-line spoof
                     ip = None
 
                 user = User(user, host, real, ip)
+                # we hold on to nick:User of all connected users
                 self._users[nick] = user
 
                 self.to_check.append((monotonic(), nick, user))
@@ -190,6 +200,8 @@ class Server(BaseServer):
                 nick = p_cliexit.group("nick")
                 if nick in self._users:
                     user = self._users.pop(nick)
+                    # .connected is used to not match clients that disconnect
+                    # too quickly (e.g. due to OPM murder)
                     user.connected = False
 
             elif p_clinick is not None:
