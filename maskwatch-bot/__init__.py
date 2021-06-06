@@ -24,10 +24,6 @@ RPL_RSACHALLENGE2      = "740"
 RPL_ENDOFRSACHALLENGE2 = "741"
 RPL_YOUREOPER          = "381"
 
-RE_CLICONN = re.compile(r"^:[^!]+ NOTICE \* :\*{3} Notice -- Client connecting: (?P<nick>\S+) .(?P<user>[^!]+)@(?P<host>\S+). .(?P<ip>[^]]+). \S+ .(?P<real>.+).$")
-RE_CLIEXIT = re.compile(r"^:[^!]+ NOTICE \* :\*{3} Notice -- Client exiting: (?P<nick>\S+) ")
-RE_CLINICK = re.compile(r"^:[^!]+ NOTICE \* :\*{3} Notice -- Nick change: From (?P<old>\S+) to (?P<new>\S+) .*$")
-
 class Server(BaseServer):
     def __init__(self,
             bot:    BaseBot,
@@ -148,7 +144,13 @@ class Server(BaseServer):
                 # reattach |oper reason
                 reason += sep + oreason
 
-            ban = f"KLINE 1440 {ident}@{user.ip} :{reason}"
+            info = {
+                "ident": ident,
+                "user": user,
+                "reason": reason
+            }
+
+            ban = self._config.bancmd.format(**info)
             if d.type == MaskType.LETHAL:
                 await self.send_raw(ban)
             elif d.type == MaskType.DLETHAL:
@@ -196,9 +198,9 @@ class Server(BaseServer):
         else:
 
             rawline   = line.format()
-            p_cliconn = RE_CLICONN.search(rawline)
-            p_cliexit = RE_CLIEXIT.search(rawline)
-            p_clinick = RE_CLINICK.search(rawline)
+            p_cliconn = self._config.cliconnre.search(rawline)
+            p_cliexit = self._config.cliexitre.search(rawline)
+            p_clinick = self._config.clinickre.search(rawline)
 
             if p_cliconn is not None:
                 nick = p_cliconn.group("nick")

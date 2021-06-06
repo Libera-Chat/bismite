@@ -18,6 +18,10 @@ class Config(object):
     sasl: Tuple[str, str]
     oper: Tuple[str, str, Optional[str]]
 
+    bancmd:    str
+    cliconnre: Pattern
+    cliexitre: Pattern
+    clinickre: Pattern
     reasons: Dict[str, str]
 
 def load(filepath: str):
@@ -41,6 +45,10 @@ def load(filepath: str):
     if "file" in config_yaml["oper"]:
         oper_file = expanduser(config_yaml["oper"]["file"])
 
+    cliconnre = re_compile(config_yaml["cliconnre"])
+    cliexitre = re_compile(config_yaml["cliexitre"])
+    clinickre = re_compile(config_yaml["clinickre"])
+
     return Config(
         (hostname, port, tls),
         nickname,
@@ -51,5 +59,9 @@ def load(filepath: str):
         expanduser(config_yaml["database"]),
         (config_yaml["sasl"]["username"], config_yaml["sasl"]["password"]),
         (oper_name, oper_pass, oper_file),
+        config_yaml["bancmd"],
+        cliconnre,
+        cliexitre,
+        clinickre,
         config_yaml.get("reasons", {})
     )

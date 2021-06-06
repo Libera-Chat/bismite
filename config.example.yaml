@@ -14,6 +14,11 @@ oper:
   # oper via CHALLENGE key instead
   #file: ~/libera.key
 
+bancmd: "KLINE 1440 {ident}@{user.ip} :{reason}"
+cliconnre: '^:[^!]+ NOTICE \* :\*{3} Notice -- Client connecting: (?P<nick>\S+) .(?P<user>[^!]+)@(?P<host>\S+). .(?P<ip>[^]]+). \S+ .(?P<real>.+).$'
+cliexitre: '^:[^!]+ NOTICE \* :\*{3} Notice -- Client exiting: (?P<nick>\S+) '
+clinickre: '^:[^!]+ NOTICE \* :\*{3} Notice -- Nick change: From (?P<old>\S+) to (?P<new>\S+) .*$'
+
 reasons:
   tos:  "You have violated Libera Chat's terms of service. Email bans@libera.chat with questions."
   spam: "Spam is not welcome on Libera Chat. Email bans@libera.chat with questions."
