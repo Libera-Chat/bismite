@@ -123,7 +123,6 @@ class Server(BaseServer):
 
             # get all (mask, details) for matched IDs
             matches = [await self._database.masks.get(i) for i in match_ids]
-            print(matches)
 
             # sort by mask type, descending
             # this should order: exclude, dlethal, lethal, warn
