@@ -43,6 +43,6 @@ matched the pattern.
 
 Same as warn, but also k-lines the user.
 
-### DLETAH
+### DLETHAL
 
 Same as lethal, but the k-line is delayed a bit.

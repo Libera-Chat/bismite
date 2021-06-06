@@ -95,11 +95,10 @@ class Server(BaseServer):
             user: User
             ) -> Optional[int]:
 
-        ref_host   = f"{nick}!{user.user}@{user.host} {user.real}"
-        ref_ip     = f"{nick}!{user.user}@{user.ip} {user.real}"
-        references = [ref_host]
-        if not ref_host == ref_ip:
-            references.append(ref_ip)
+        references = [f"{nick}!{user.user}@{user.host} {user.real}"]
+        if (user.ip is not None and
+                not user.host == user.ip):
+            references.append(f"{nick}!{user.user}@{user.ip} {user.real}")
 
         for mask_id, pattern in self._compiled_masks.items():
             for ref in references:
@@ -178,7 +177,10 @@ class Server(BaseServer):
                 user = p_cliconn.group("user")
                 host = p_cliconn.group("host")
                 real = p_cliconn.group("real")
-                ip   = p_cliconn.group("ip")
+                ip: Optional[str] = p_cliconn.group("ip")
+
+                if ip == "0":
+                    ip = None
 
                 user = User(user, host, real, ip)
                 self._users[nick] = user
@@ -222,6 +224,8 @@ class Server(BaseServer):
                 outs = await getattr(self, attrib)(opername, who, args)
                 for out in outs:
                     await self.send(build("NOTICE", [who, out]))
+            else:
+                await self.send(build("NOTICE", [who, f"\x02{command.upper()}\x02 is not a valid command"]))
 
     def _mask_format(self,
             mask_id: int,
@@ -309,6 +313,8 @@ class Server(BaseServer):
                 else:
                     del self._compiled_masks[mask_id]
 
+                log = f"{nick} TOGGLEMASK: {enabled_s} mask \x02#{mask_id}\x02"
+                await self.send(build("PRIVMSG", [self._config.channel, log]))
                 return [f"mask {mask_id} {enabled_s}"]
             else:
                 return [f"unknown mask id {mask_id}"]
@@ -334,6 +340,8 @@ class Server(BaseServer):
                     await self._database.masks.set_type(
                         nick, oper, mask_id, mask_type
                     )
+                    log = f"{nick} SETMASK: type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
+                    await self.send(build("PRIVMSG", [self._config.channel, log]))
                     return [
                         f"{mask} changed from "
                         f"{d.type.name} to {mask_type.name}"

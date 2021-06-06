@@ -8,7 +8,7 @@ class User(object):
     user: str
     host: str
     real: str
-    ip:   str
+    ip: Optional[str]
 
 class MaskType(Enum):
     LETHAL  = 1
