@@ -209,8 +209,8 @@ class Server(BaseServer):
                     idx = self.to_check_nick.pop(old_nick)
                     _1, _2, user = self.to_check[idx]
 
-                    self.to_check.append((monotonic(), new_nick, user))
-                    self.to_check_nick[new_nick] = len(self.to_check)-1
+                    #self.to_check.append((monotonic(), new_nick, user))
+                    #self.to_check_nick[new_nick] = len(self.to_check)-1
 
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and
