@@ -10,8 +10,9 @@ sasl:
 
 oper:
   name: bismite
-  file: ~/libera.key
   pass: hunter4
+  # oper via CHALLENGE key instead
+  #file: ~/libera.key
 
 reasons:
   tos:  "You have violated Libera Chat's terms of service. Email bans@libera.chat with questions."
