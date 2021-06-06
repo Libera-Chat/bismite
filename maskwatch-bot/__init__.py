@@ -50,11 +50,10 @@ class Server(BaseServer):
         # turn off throttling
         pass
 
-    async def _oper_up(self,
+    async def _oper_challenge(self,
             oper_name: str,
             oper_file: str,
             oper_pass: str):
-
         try:
             challenge = Challenge(keyfile=oper_file, password=oper_pass)
         except Exception:
@@ -76,6 +75,16 @@ class Server(BaseServer):
                     retort = challenge.finalise()
                     await self.send(build("CHALLENGE", [f"+{retort}"]))
                     break
+
+    async def _oper_up(self,
+            oper_name: str,
+            oper_pass: str,
+            oper_file: Optional[str]):
+
+        if oper_file is not None:
+            await self._oper_challenge(oper_name, oper_file, oper_pass)
+        else:
+            await self.send(build("OPER", [oper_name, oper_pass]))
 
     async def _is_oper(self, nickname: str):
         await self.send(build("WHOIS", [nickname]))
@@ -163,8 +172,8 @@ class Server(BaseServer):
                 self._compiled_masks[mask_id] = (cmask, flags)
 
             await self.send(build("MODE", [self.nickname, "+g"]))
-            oper_name, oper_file, oper_pass = self._config.oper
-            await self._oper_up(oper_name, oper_file, oper_pass)
+            oper_name, oper_pass, oper_file = self._config.oper
+            await self._oper_up(oper_name, oper_pass, oper_file)
 
         elif line.command == RPL_YOUREOPER:
             # F far cliconn
