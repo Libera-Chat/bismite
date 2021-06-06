@@ -11,6 +11,7 @@ from ircrobots import Bot as BaseBot
 from ircrobots import Server as BaseServer
 
 from ircstates.numerics   import *
+from ircstates            import User
 from ircrobots.matching   import Response, ANY, Folded, SELF
 from ircchallenge         import Challenge
 from ircrobots.formatting import strip as format_strip
@@ -209,23 +210,23 @@ class Server(BaseServer):
             await self.send(build("PRIVMSG", [self._config.channel, out]))
 
             cmd, _, args = line.params[1].partition(" ")
-            await self.cmd(line.hostmask.nickname, cmd.lower(), args)
+            await self.cmd(line.hostmask, cmd.lower(), args)
 
     async def cmd(self,
-            who:     str,
+            who:     User,
             command: str,
             args:    str):
 
-        opername = await self._get_oper(who)
+        opername = await self._get_oper(who.nickname)
         if opername is not None:
             opername = None if opername == "<grant>" else opername
             attrib  = f"cmd_{command}"
             if hasattr(self, attrib):
-                outs = await getattr(self, attrib)(opername, who, args)
+                outs = await getattr(self, attrib)(opername, who._source, args)
                 for out in outs:
-                    await self.send(build("NOTICE", [who, out]))
+                    await self.send(build("NOTICE", [who.nickname, out]))
             else:
-                await self.send(build("NOTICE", [who, f"\x02{command.upper()}\x02 is not a valid command"]))
+                await self.send(build("NOTICE", [who.nickname, f"\x02{command.upper()}\x02 is not a valid command"]))
 
     def _mask_format(self,
             mask_id: int,
@@ -313,7 +314,11 @@ class Server(BaseServer):
                 else:
                     del self._compiled_masks[mask_id]
 
-                log = f"{nick} TOGGLEMASK: {enabled_s} mask \x02#{mask_id}\x02"
+                if oper is not None:
+                    who = f"{nick} ({oper})"
+                else:
+                    who = f"{nick}"
+                log = f"{who} TOGGLEMASK: {enabled_s} mask \x02#{mask_id}\x02"
                 await self.send(build("PRIVMSG", [self._config.channel, log]))
                 return [f"mask {mask_id} {enabled_s}"]
             else:
@@ -340,7 +345,11 @@ class Server(BaseServer):
                     await self._database.masks.set_type(
                         nick, oper, mask_id, mask_type
                     )
-                    log = f"{nick} SETMASK: type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
+                    if oper is not None:
+                        who = f"{nick} ({oper})"
+                    else:
+                        who = f"{nick}"
+                    log = f"{who} SETMASK: type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
                     await self.send(build("PRIVMSG", [self._config.channel, log]))
                     return [
                         f"{mask} changed from "
