@@ -20,6 +20,10 @@ class MaskType(Enum):
     def __contains__(self, name: str):
         return name in {"LETHAL", "WARN", "DLETHAL"}
 
+class Event(Enum):
+    CONNECT = 1
+    NICK    = 2
+
 @dataclass
 class MaskDetails(object):
     type:     MaskType

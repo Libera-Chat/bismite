@@ -15,7 +15,7 @@ from ircrobots.matching   import Response, ANY, Folded, SELF
 from ircchallenge         import Challenge
 from ircrobots.formatting import strip as format_strip
 
-from .common   import MaskType, User, mask_compile, mask_find
+from .common   import Event, MaskType, User, mask_compile, mask_find
 from .config   import Config
 from .database import Database
 
@@ -44,7 +44,7 @@ class Server(BaseServer):
 
         self.delayed_send: Deque[Tuple[int, str]] = deque()
 
-        self.to_check: Deque[Tuple[float, str, User]] = deque()
+        self.to_check: Deque[Tuple[float, str, User, Event]] = deque()
 
     def set_throttle(self, rate: int, time: float):
         # turn off throttling
@@ -91,8 +91,9 @@ class Server(BaseServer):
         return whois_line.command == RPL_WHOISOPERATOR
 
     async def _mask_match(self,
-            nick: str,
-            user: User
+            nick:  str,
+            user:  User,
+            event: Event
             ) -> Optional[int]:
 
         references = [f"{nick}!{user.user}@{user.host} {user.real}"]
@@ -108,10 +109,11 @@ class Server(BaseServer):
                     return mask_id
 
     async def mask_check(self,
-            nick: str,
-            user: User):
+            nick:  str,
+            user:  User,
+            event: Event):
 
-        mask_id = await self._mask_match(nick, user)
+        mask_id = await self._mask_match(nick, user, event)
         if mask_id is not None:
             _, d = await self._database.masks.get(mask_id)
 
@@ -195,7 +197,7 @@ class Server(BaseServer):
                 # we hold on to nick:User of all connected users
                 self._users[nick] = user
 
-                self.to_check.append((monotonic(), nick, user))
+                self.to_check.append((monotonic(), nick, user, Event.CONNECT))
 
             elif p_cliexit is not None:
                 nick = p_cliexit.group("nick")
