@@ -5,7 +5,7 @@ from ircrobots import ConnectionParams, SASLUserPass
 
 from .       import Bot
 from .config import Config, load as config_load
-from .timers import delayed_send
+from .timers import delayed_send, delayed_check
 
 async def main(config: Config):
     bot = Bot(config)
@@ -27,6 +27,7 @@ async def main(config: Config):
     await bot.add_server(host, params)
     await asyncio.wait([
         delayed_send(bot),
+        delayed_check(bot),
         bot.run()
     ])
 
