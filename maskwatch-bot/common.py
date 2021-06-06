@@ -10,6 +10,8 @@ class User(object):
     real: str
     ip: Optional[str]
 
+    connected: bool = True
+
 class MaskType(Enum):
     LETHAL  = 1
     WARN    = 2
