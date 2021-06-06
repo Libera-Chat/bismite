@@ -39,7 +39,8 @@ $ python3 -m maskwatch-bot config.yaml
 /msg bismite addmask /<regex>/ <reason>[|<oper reason>]
 ```
 
-delimiters on `/<regex>/` can be any non-alphanumeric character, e.g. `,<regex>,`
+delimiters on `/<regex>/` can be any non-alphanumeric character, e.g.
+`,<regex>,`
 
 ### SETMASK
 ```
@@ -60,8 +61,8 @@ matched the pattern.
 
 ### LETHAL
 
-Same as warn, but also k-lines the user.
+Same as `WARN`, but also k-lines the user.
 
 ### DLETHAL
 
-Same as lethal, but the k-line is delayed a bit.
+Same as `LETHAL`, but the k-line is delayed a bit.
