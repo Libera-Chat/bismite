@@ -105,7 +105,8 @@ class Server(BaseServer):
 
         for mask_id, (pattern, flags) in self._compiled_masks.items():
             for ref in references:
-                if pattern.search(ref):
+                if ((not event == Event.NICK or "N" in flags) and
+                        pattern.search(ref)):
                     return mask_id
 
     async def mask_check(self,
@@ -215,8 +216,9 @@ class Server(BaseServer):
                     user = self._users.pop(old_nick)
                     self._users[new_nick] = user
 
-                    # we should only eval on nick change when issue #4 is done
-                    #self.to_check.append((monotonic(), new_nick, user))
+                    self.to_check.append(
+                        (monotonic(), new_nick, user, Event.NICK)
+                    )
 
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and
