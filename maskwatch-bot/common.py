@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from enum        import Enum
+from enum        import Enum, IntEnum
 from typing      import Pattern, Optional, Tuple
 
 @dataclass
@@ -12,9 +12,9 @@ class User(object):
 
     connected: bool = True
 
-class MaskType(Enum):
-    LETHAL  = 1
-    WARN    = 2
+class MaskType(IntEnum):
+    WARN    = 1
+    LETHAL  = 2
     DLETHAL = 3
 
     def __contains__(self, name: str):
