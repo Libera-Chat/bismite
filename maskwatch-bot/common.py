@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
-from enum        import Enum
-from typing      import Pattern, Optional
+from enum        import Enum, IntEnum
+from typing      import Pattern, Optional, Tuple
 
 @dataclass
 class User(object):
@@ -10,13 +10,20 @@ class User(object):
     real: str
     ip: Optional[str]
 
-class MaskType(Enum):
-    LETHAL  = 1
-    WARN    = 2
+    connected: bool = True
+
+class MaskType(IntEnum):
+    WARN    = 1
+    LETHAL  = 2
     DLETHAL = 3
+    EXCLUDE = 4
 
     def __contains__(self, name: str):
-        return name in {"LETHAL", "WARN", "DLETHAL"}
+        return name in {"WARN", "LETHAL", "DLETHAL", "EXCLUDE"}
+
+class Event(Enum):
+    CONNECT = 1
+    NICK    = 2
 
 @dataclass
 class MaskDetails(object):
@@ -27,7 +34,9 @@ class MaskDetails(object):
     last_hit: Optional[int]
 
 
-def mask_compile(pattern: str) -> Pattern:
+def mask_compile(
+        pattern: str
+        ) -> Tuple[Pattern, str]:
     p, sflags = pattern.rsplit(pattern[0], 1)
     pattern   = p[1:]
 
@@ -35,7 +44,7 @@ def mask_compile(pattern: str) -> Pattern:
     if "i" in sflags:
         flags |= re.I
 
-    return re.compile(pattern, flags)
+    return re.compile(pattern, flags), sflags
 
 def _find_unescaped(s: str, c: str):
     i = 0

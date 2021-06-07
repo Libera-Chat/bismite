@@ -41,15 +41,13 @@ async def delayed_check(
         if bot.servers:
             server = list(bot.servers.values())[0]
             while server.to_check:
-                ts, nick, user = server.to_check[0]
+                ts, nick, user, event = server.to_check[0]
                 due = ts+delay
 
-                if ts == -1:
+                if due <= now:
                     server.to_check.popleft()
-                elif due <= now:
-                    server.to_check.popleft()
-                    del server.to_check_nick[nick]
-                    await server.mask_check(nick, user)
+                    if user.connected:
+                        await server.mask_check(nick, user, event)
                 else:
                     wait = due-now
                     break

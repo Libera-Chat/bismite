@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from os.path     import expanduser
 from re          import compile as re_compile
-from typing      import Dict, List, Pattern, Tuple
+from typing      import Dict, List, Optional, Pattern, Tuple
 
 import yaml
 
@@ -16,8 +16,12 @@ class Config(object):
     database: str
 
     sasl: Tuple[str, str]
-    oper: Tuple[str, str]
+    oper: Tuple[str, str, Optional[str]]
 
+    bancmd:    str
+    cliconnre: Pattern
+    cliexitre: Pattern
+    clinickre: Pattern
     reasons: Dict[str, str]
 
 def load(filepath: str):
@@ -36,8 +40,14 @@ def load(filepath: str):
     port = int(port_s)
 
     oper_name = config_yaml["oper"]["name"]
-    oper_file = expanduser(config_yaml["oper"]["file"])
     oper_pass = config_yaml["oper"]["pass"]
+    oper_file: Optional[str] = None
+    if "file" in config_yaml["oper"]:
+        oper_file = expanduser(config_yaml["oper"]["file"])
+
+    cliconnre = re_compile(config_yaml["cliconnre"])
+    cliexitre = re_compile(config_yaml["cliexitre"])
+    clinickre = re_compile(config_yaml["clinickre"])
 
     return Config(
         (hostname, port, tls),
@@ -48,6 +58,10 @@ def load(filepath: str):
         config_yaml["channel"],
         expanduser(config_yaml["database"]),
         (config_yaml["sasl"]["username"], config_yaml["sasl"]["password"]),
-        (oper_name, oper_file, oper_pass),
+        (oper_name, oper_pass, oper_file),
+        config_yaml["bancmd"],
+        cliconnre,
+        cliexitre,
+        clinickre,
         config_yaml.get("reasons", {})
     )

@@ -16,7 +16,7 @@ from ircrobots.matching   import Response, ANY, Folded, SELF
 from ircchallenge         import Challenge
 from ircrobots.formatting import strip as format_strip
 
-from .common   import MaskType, User, mask_compile, mask_find
+from .common   import Event, MaskType, User, mask_compile, mask_find
 from .config   import Config
 from .database import Database
 
@@ -25,10 +25,6 @@ RPL_RSACHALLENGE2      = "740"
 RPL_ENDOFRSACHALLENGE2 = "741"
 RPL_WHOISSPECIAL       = "320"
 RPL_YOUREOPER          = "381"
-
-RE_CLICONN = re.compile(r"^\*{3} Notice -- Client connecting: (?P<nick>\S+) .(?P<user>[^!]+)@(?P<host>\S+). .(?P<ip>[^]]+). \S+ .(?P<real>.+).$")
-RE_CLIEXIT = re.compile(r"^\*{3} Notice -- Client exiting: (?P<nick>\S+) ")
-RE_CLINICK = re.compile(r"^\*{3} Notice -- Nick change: From (?P<old>\S+) to (?P<new>\S+) .*$")
 
 class Server(BaseServer):
     def __init__(self,
@@ -41,22 +37,21 @@ class Server(BaseServer):
         self._database = Database(config.database)
 
         self._users:          Dict[str, User] = {}
-        self._compiled_masks: TOrderedDict[int, Pattern] = OrderedDict()
+        self._compiled_masks: TOrderedDict[int, Tuple[Pattern, str]] \
+            = OrderedDict()
 
         self.delayed_send: Deque[Tuple[int, str]] = deque()
 
-        self.to_check:      Deque[Tuple[float, str, User]] = deque()
-        self.to_check_nick: Dict[str, int] = {}
+        self.to_check: Deque[Tuple[float, str, User, Event]] = deque()
 
     def set_throttle(self, rate: int, time: float):
         # turn off throttling
         pass
 
-    async def _oper_up(self,
+    async def _oper_challenge(self,
             oper_name: str,
             oper_file: str,
             oper_pass: str):
-
         try:
             challenge = Challenge(keyfile=oper_file, password=oper_pass)
         except Exception:
@@ -79,6 +74,16 @@ class Server(BaseServer):
                     await self.send(build("CHALLENGE", [f"+{retort}"]))
                     break
 
+    async def _oper_up(self,
+            oper_name: str,
+            oper_pass: str,
+            oper_file: Optional[str]):
+
+        if oper_file is not None:
+            await self._oper_challenge(oper_name, oper_file, oper_pass)
+        else:
+            await self.send(build("OPER", [oper_name, oper_pass]))
+
     async def _get_oper(self, nickname: str):
         await self.send(build("WHOIS", [nickname]))
 
@@ -96,34 +101,55 @@ class Server(BaseServer):
         return None
 
     async def _mask_match(self,
-            nick: str,
-            user: User
-            ) -> Optional[int]:
+            nick:  str,
+            user:  User,
+            event: Event
+            ) -> List[int]:
 
         references = [f"{nick}!{user.user}@{user.host} {user.real}"]
         if (user.ip is not None and
                 not user.host == user.ip):
+            # if the user has an IP and it doesn't match their visible 'host',
+            # also match against that IP
             references.append(f"{nick}!{user.user}@{user.ip} {user.real}")
 
-        for mask_id, pattern in self._compiled_masks.items():
+        matches: List[int] = []
+        for mask_id, (pattern, flags) in self._compiled_masks.items():
             for ref in references:
-                if pattern.search(ref):
-                    return mask_id
+                if ((not event == Event.NICK or "N" in flags) and
+                        pattern.search(ref)):
+                    matches.append(mask_id)
+        return matches
 
     async def mask_check(self,
-            nick: str,
-            user: User):
+            nick:  str,
+            user:  User,
+            event: Event):
 
-        mask_id = await self._mask_match(nick, user)
-        if mask_id is not None:
-            _, d = await self._database.masks.get(mask_id)
+        match_ids = await self._mask_match(nick, user, event)
+        if match_ids:
+            for match_id in match_ids:
+                await self._database.masks.hit(match_id)
+
+            # get all (mask, details) for matched IDs
+            matches = [await self._database.masks.get(i) for i in match_ids]
+
+            # sort by mask type, descending
+            # this should order: exclude, dlethal, lethal, warn
+            matches.sort(key=lambda m: m[1].type, reverse=True)
+
+            mask, d = matches[0]
 
             ident  = user.user
+            # if the user doesn't have identd, bin the whole host
             if ident.startswith("~"):
                 ident = "*"
 
             reason = d.reason.lstrip()
+            # if the user-facing bit is `$thing`, see if `thing` is a known
+            # reason alias
             if reason.startswith("$"):
+                # split off |oper reason
                 reason, sep, oreason = reason.partition("|")
                 reason_name = reason.rstrip()[1:]
                 if not reason_name in self._config.reasons:
@@ -132,19 +158,25 @@ class Server(BaseServer):
                     )
 
                 reason  = self._config.reasons[reason_name]
+                # reattach |oper reason
                 reason += sep + oreason
 
-            ban = f"KLINE 1440 {ident}@{user.ip} :{reason}"
+            info = {
+                "ident": ident,
+                "user": user,
+                "reason": reason
+            }
+
+            ban = self._config.bancmd.format(**info)
             if d.type == MaskType.LETHAL:
                 await self.send_raw(ban)
             elif d.type == MaskType.DLETHAL:
                 self.delayed_send.append((monotonic(), ban))
 
-            await self._database.masks.hit(mask_id)
             await self.send(build("PRIVMSG", [
                 self._config.channel,
                 (
-                    f"MASK: {d.type.name} mask {mask_id} "
+                    f"MASK: {d.type.name} mask {match_id} "
                     f"{nick}!{user.user}@{user.host} {user.real}"
                 )
             ]))
@@ -152,70 +184,20 @@ class Server(BaseServer):
     async def line_read(self, line: Line):
         if line.command == RPL_WELCOME:
             self._compiled_masks.clear()
+            # load and compile all masks
             for mask_id, mask in await self._database.masks.list_enabled():
-                cmask = mask_compile(mask)
-                self._compiled_masks[mask_id] = cmask
+                cmask, flags = mask_compile(mask)
+                self._compiled_masks[mask_id] = (cmask, flags)
 
             await self.send(build("MODE", [self.nickname, "+g"]))
-            oper_name, oper_file, oper_pass = self._config.oper
-            await self._oper_up(oper_name, oper_file, oper_pass)
+            oper_name, oper_pass, oper_file = self._config.oper
+            await self._oper_up(oper_name, oper_pass, oper_file)
 
         elif line.command == RPL_YOUREOPER:
             # F far cliconn
             # c near cliconn
             # n nick changes
             await self.send(build("MODE", [self.nickname, "-s+s", "+Fcn"]))
-
-        elif (line.command == "NOTICE" and
-                line.params[0] == "*" and
-                line.source is not None and
-                not "!" in line.source):
-
-            # snote!
-
-            p_cliconn = RE_CLICONN.search(line.params[1])
-            p_cliexit = RE_CLIEXIT.search(line.params[1])
-            p_clinick = RE_CLINICK.search(line.params[1])
-
-            if p_cliconn is not None:
-                nick = p_cliconn.group("nick")
-                user = p_cliconn.group("user")
-                host = p_cliconn.group("host")
-                real = p_cliconn.group("real")
-                ip: Optional[str] = p_cliconn.group("ip")
-
-                if ip == "0":
-                    ip = None
-
-                user = User(user, host, real, ip)
-                self._users[nick] = user
-
-                self.to_check.append((monotonic(), nick, user))
-                self.to_check_nick[nick] = len(self.to_check)-1
-
-            elif p_cliexit is not None:
-                nick = p_cliexit.group("nick")
-                if nick in self._users:
-                    del self._users[nick]
-
-                if nick in self.to_check_nick:
-                    idx = self.to_check_nick.pop(nick)
-                    ts, _, user = self.to_check[idx]
-                    self.to_check[idx] = (-1, nick, user)
-
-            elif p_clinick is not None:
-                old_nick = p_clinick.group("old")
-                new_nick = p_clinick.group("new")
-
-                if old_nick in self._users:
-                    user = self._users.pop(old_nick)
-                    self._users[new_nick] = user
-                if old_nick in self.to_check_nick:
-                    idx = self.to_check_nick.pop(old_nick)
-                    _1, _2, user = self.to_check[idx]
-
-                    #self.to_check.append((monotonic(), new_nick, user))
-                    #self.to_check_nick[new_nick] = len(self.to_check)-1
 
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and
@@ -227,7 +209,48 @@ class Server(BaseServer):
             await self.send(build("PRIVMSG", [self._config.channel, out]))
 
             cmd, _, args = line.params[1].partition(" ")
-            await self.cmd(line.hostmask, cmd.lower(), args)
+            await self.cmd(line.hostmask.nickname, cmd.lower(), args)
+
+        else:
+
+            rawline   = line.format()
+            p_cliconn = self._config.cliconnre.search(rawline)
+            p_cliexit = self._config.cliexitre.search(rawline)
+            p_clinick = self._config.clinickre.search(rawline)
+
+            if p_cliconn is not None:
+                nick = p_cliconn.group("nick")
+                user = p_cliconn.group("user")
+                host = p_cliconn.group("host")
+                real = p_cliconn.group("real")
+                # the regex might not have an `ip` group
+                ip: Optional[str] = p_cliconn.groupdict().get("ip", None)
+
+                if ip == "0":
+                    # remote i-line spoof
+                    ip = None
+
+                user = User(user, host, real, ip)
+                # we hold on to nick:User of all connected users
+                self._users[nick] = user
+
+                self.to_check.append((monotonic(), nick, user, Event.CONNECT))
+
+            elif p_cliexit is not None:
+                nick = p_cliexit.group("nick")
+                if nick in self._users:
+                    user = self._users.pop(nick)
+                    # .connected is used to not match clients that disconnect
+                    # too quickly (e.g. due to OPM murder)
+                    user.connected = False
+
+            elif p_clinick is not None:
+                old_nick = p_clinick.group("old")
+                new_nick = p_clinick.group("new")
+
+                if old_nick in self._users:
+                    user = self._users.pop(old_nick)
+                    self._users[new_nick] = user
 
     async def cmd(self,
             who:     User,
@@ -295,7 +318,7 @@ class Server(BaseServer):
             if end > 0:
                 mask = format_strip(args[:end])
                 try:
-                    cmask = mask_compile(mask)
+                    cmask, flags = mask_compile(mask)
                 except re.error as e:
                     return [f"regex error: {str(e)}"]
                 else:
@@ -304,7 +327,7 @@ class Server(BaseServer):
                         mask_id = await self._database.masks.add(
                             nick, oper, mask, reason
                         )
-                        self._compiled_masks[mask_id] = cmask
+                        self._compiled_masks[mask_id] = (cmask, flags)
                         return [f"added {mask_id}"]
                     else:
                         return ["please provide a reason"]
@@ -322,9 +345,9 @@ class Server(BaseServer):
                 enabled_s = "enabled" if enabled else "disabled"
 
                 if enabled:
-                    mask, _ = await self._database.masks.get(mask_id)
-                    cmask   = mask_compile(mask)
-                    self._compiled_masks[mask_id] = cmask
+                    mask, _      = await self._database.masks.get(mask_id)
+                    cmask, flags = mask_compile(mask)
+                    self._compiled_masks[mask_id] = (cmask, flags)
                     self._compiled_masks = OrderedDict(
                         sorted(self._compiled_masks.items())
                     )
