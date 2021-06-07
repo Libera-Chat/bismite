@@ -103,7 +103,7 @@ class Server(BaseServer):
             nick:  str,
             user:  User,
             event: Event
-            ) -> Optional[int]:
+            ) -> List[int]:
 
         references = [f"{nick}!{user.user}@{user.host} {user.real}"]
         if (user.ip is not None and
@@ -112,20 +112,32 @@ class Server(BaseServer):
             # also match against that IP
             references.append(f"{nick}!{user.user}@{user.ip} {user.real}")
 
+        matches: List[int] = []
         for mask_id, (pattern, flags) in self._compiled_masks.items():
             for ref in references:
                 if ((not event == Event.NICK or "N" in flags) and
                         pattern.search(ref)):
-                    return mask_id
+                    matches.append(mask_id)
+        return matches
 
     async def mask_check(self,
             nick:  str,
             user:  User,
             event: Event):
 
-        mask_id = await self._mask_match(nick, user, event)
-        if mask_id is not None:
-            _, d = await self._database.masks.get(mask_id)
+        match_ids = await self._mask_match(nick, user, event)
+        if match_ids:
+            for match_id in match_ids:
+                await self._database.masks.hit(match_id)
+
+            # get all (mask, details) for matched IDs
+            matches = [await self._database.masks.get(i) for i in match_ids]
+
+            # sort by mask type, descending
+            # this should order: exclude, dlethal, lethal, warn
+            matches.sort(key=lambda m: m[1].type, reverse=True)
+
+            mask, d = matches[0]
 
             ident  = user.user
             # if the user doesn't have identd, bin the whole host
@@ -154,11 +166,10 @@ class Server(BaseServer):
             elif d.type == MaskType.DLETHAL:
                 self.delayed_send.append((monotonic(), ban))
 
-            await self._database.masks.hit(mask_id)
             await self.send(build("PRIVMSG", [
                 self._config.channel,
                 (
-                    f"MASK: {d.type.name} mask {mask_id} "
+                    f"MASK: {d.type.name} mask {match_id} "
                     f"{nick}!{user.user}@{user.host} {user.real}"
                 )
             ]))
