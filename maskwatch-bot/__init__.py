@@ -99,22 +99,15 @@ class Server(BaseServer):
     async def _format(self, string: str):
         # expand reason templates
         # this bit might be a little janky
-        result = ""
-        for part in string.split():
-            if part.startswith("$") and len(part) > 1:
-                if part[1:].lower() in self._reasons:
-                    part = part.replace(part.lower(), self._reasons[part[1:].lower()])
-                result += f" {part}"
-
-        # run it again to handle nested templates
-        final = ""
-        for part in result.split():
-            if part.startswith("$") and len(part) > 1:
-                if part[1:].lower() in self._reasons:
-                    part = part.replace(part.lower(), self._reasons[part[1:].lower()])
-            final += f" {part}"
-
-        return final.lstrip()
+        while "$" in string:
+            for part in string.split():
+                if part.startswith("$"):
+                    if len(part) < 2:
+                        # we can't get a template from only '$'
+                        continue
+                    if part[1:].lower() in self._reasons:
+                        string = string.replace(part, self._reasons[part[1:].lower()])
+        return string.lstrip()
 
     async def _mask_match(self,
             nick:  str,
