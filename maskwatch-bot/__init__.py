@@ -126,6 +126,7 @@ class Server(BaseServer):
             user:  User,
             event: Event):
 
+        await self._idle_reset()
         match_ids = await self._mask_match(nick, user, event)
         if match_ids:
             for match_id in match_ids:
@@ -235,7 +236,6 @@ class Server(BaseServer):
                 self._users[nick] = user
 
                 self.to_check.append((monotonic(), nick, user, Event.CONNECT))
-                await self._idle_reset()
 
             elif p_cliexit is not None:
                 nick = p_cliexit.group("nick")
@@ -244,7 +244,6 @@ class Server(BaseServer):
                     # .connected is used to not match clients that disconnect
                     # too quickly (e.g. due to OPM murder)
                     user.connected = False
-                await self._idle_reset()
 
             elif p_clinick is not None:
                 old_nick = p_clinick.group("old")
@@ -257,7 +256,6 @@ class Server(BaseServer):
                     self.to_check.append(
                         (monotonic(), new_nick, user, Event.NICK)
                     )
-                await self._idle_reset()
 
     async def cmd(self,
             who:     str,
