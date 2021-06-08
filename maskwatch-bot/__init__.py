@@ -95,6 +95,21 @@ class Server(BaseServer):
         })
         return whois_line.command == RPL_WHOISOPERATOR
 
+    async def _get_account(self, nickname: str):
+        await self.send(build("WHOIS", [nickname]))
+
+        whois_account = Response(RPL_WHOISACCOUNT, [SELF, Folded(nickname)])
+        whois_end     = Response(RPL_ENDOFWHOIS,    [SELF, Folded(nickname)])
+        #:lithium.libera.chat 330 sandcat sandcat sandcat :is logged in as
+        #:lithium.libera.chat 318 sandcat sandcat :End of /WHOIS list.
+
+        whois_line = await self.wait_for({
+            whois_end, whois_account
+        })
+        if whois_line.command == RPL_WHOISACCOUNT:
+            return whois_line.params[2]
+        return None
+
     async def _mask_match(self,
             nick:  str,
             user:  User,
@@ -112,6 +127,8 @@ class Server(BaseServer):
         for mask_id, (pattern, flags) in self._compiled_masks.items():
             for ref in references:
                 if ((not event == Event.NICK or "N" in flags) and
+                        (not user.account or not "a" in flags) and
+                        (user.account or not "A" in flags) and
                         pattern.search(ref)):
                     matches.append(mask_id)
         return matches
@@ -220,12 +237,13 @@ class Server(BaseServer):
                 real = p_cliconn.group("real")
                 # the regex might not have an `ip` group
                 ip: Optional[str] = p_cliconn.groupdict().get("ip", None)
+                account = await self._get_account(nick)
 
                 if ip == "0":
                     # remote i-line spoof
                     ip = None
 
-                user = User(user, host, real, ip)
+                user = User(user, host, real, ip, account)
                 # we hold on to nick:User of all connected users
                 self._users[nick] = user
 
