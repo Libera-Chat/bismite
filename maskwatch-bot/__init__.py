@@ -95,6 +95,11 @@ class Server(BaseServer):
         })
         return whois_line.command == RPL_WHOISOPERATOR
 
+    async def _idle_reset(self):
+        # send ourselves a PM to reset our idle time
+        if self._config.antiidle:
+            await self.send(build("PRIVMSG", [self.nickname, "hello self"]))
+
     async def _mask_match(self,
             nick:  str,
             user:  User,
@@ -123,6 +128,7 @@ class Server(BaseServer):
             user:  User,
             event: Event):
 
+        await self._idle_reset()
         match_ids = await self._mask_match(nick, user, event)
         if match_ids:
             for match_id in match_ids:
