@@ -15,4 +15,8 @@ CREATE TABLE changes (
     time    INTEGER NOT NULL,
     change  TEXT NOT NULL
 );
+CREATE TABLE reasons (
+    key TEXT NOT NULL,
+    value TEXT NOT NULL
+);
 COMMIT;

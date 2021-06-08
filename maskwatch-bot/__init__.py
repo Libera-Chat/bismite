@@ -37,6 +37,7 @@ class Server(BaseServer):
         self._users:          Dict[str, User] = {}
         self._compiled_masks: TOrderedDict[int, Tuple[Pattern, str]] \
             = OrderedDict()
+        self._reasons:        Dict[str, str] = {}
 
         self.delayed_send: Deque[Tuple[int, str]] = deque()
 
@@ -95,6 +96,26 @@ class Server(BaseServer):
         })
         return whois_line.command == RPL_WHOISOPERATOR
 
+    async def _format(self, string: str):
+        # expand reason templates
+        # this bit might be a little janky
+        result = ""
+        for part in string.split():
+            if part.startswith("$") and len(part) > 1:
+                if part[1:].lower() in self._reasons:
+                    part = part.replace(part.lower(), self._reasons[part[1:].lower()])
+                result += f" {part}"
+
+        # run it again to handle nested templates
+        final = ""
+        for part in result.split():
+            if part.startswith("$") and len(part) > 1:
+                if part[1:].lower() in self._reasons:
+                    part = part.replace(part.lower(), self._reasons[part[1:].lower()])
+            final += f" {part}"
+
+        return final.lstrip()
+
     async def _mask_match(self,
             nick:  str,
             user:  User,
@@ -143,18 +164,12 @@ class Server(BaseServer):
             reason = d.reason.lstrip()
             # if the user-facing bit is `$thing`, see if `thing` is a known
             # reason alias
-            if reason.startswith("$"):
-                # split off |oper reason
-                reason, sep, oreason = reason.partition("|")
-                reason_name = reason.rstrip()[1:]
-                if not reason_name in self._config.reasons:
-                    raise ValueError(
-                        f"unrecognised reason alias {reason_name}"
-                    )
 
-                reason  = self._config.reasons[reason_name]
-                # reattach |oper reason
-                reason += sep + oreason
+            # split off |oper reason
+            reason, sep, oreason = reason.partition("|")
+            reason  = await self._format(reason.rstrip())
+            # reattach |oper reason
+            reason += sep + oreason
 
             info = {
                 "ident": ident,
@@ -179,10 +194,14 @@ class Server(BaseServer):
     async def line_read(self, line: Line):
         if line.command == RPL_WELCOME:
             self._compiled_masks.clear()
-            # load and compile all masks
+            self._reasons.clear()
+            # load and compile all masks/reason templates
             for mask_id, mask in await self._database.masks.list_enabled():
                 cmask, flags = mask_compile(mask)
                 self._compiled_masks[mask_id] = (cmask, flags)
+
+            for key, value in await self._database.reasons.list():
+                self._reasons[key] = value
 
             await self.send(build("MODE", [self.nickname, "+g"]))
             oper_name, oper_pass, oper_file = self._config.oper
@@ -396,6 +415,37 @@ class Server(BaseServer):
             mask, d = await self._database.masks.get(mask_id)
             outs.append(self._mask_format(mask_id, mask, d))
         return outs or ["no masks"]
+
+    async def cmd_addreason(self, nick: str, args: str):
+        args = args.split()
+        if len(args) < 2:
+            return ["syntax: addreason <alias> <text>"]
+
+        if await self._database.reasons.has_key(args[0].lower()):
+            return [f"the reason \x02${args[0].lower()}\x02 already exists"]
+
+        await self._database.reasons.add(args[0].lower(), " ".join(args[1:]))
+        self._reasons[args[0].lower()] = " ".join(args[1:])
+        return [f"added \x02${args[0].lower()}\x02"]
+
+    async def cmd_delreason(self, nick: str, args: str):
+        args = args.split()
+        if len(args) < 1:
+            return ["syntax: delreason <alias>"]
+
+        if await self._database.reasons.has_key(args[0].lower()):
+            await self._database.reasons.delete(args[0].lower())
+            del self._reasons[args[0].lower()]
+            return [f"deleted \x02${args[0].lower()}\x02"]
+        else:
+            return [f"the reason \x02${args[0].lower()}\x02 does not exist"]
+
+    async def cmd_listreason(self, nick: str, args: str):
+        args = args.split()
+        outs: List[str] = []
+        for key, value in self._reasons.items():
+            outs.append(f"${key}: \x02{value}\x02")
+        return outs or ["no reason templates"]
 
     def line_preread(self, line: Line):
         print(f"< {line.format()}")

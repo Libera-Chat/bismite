@@ -169,6 +169,46 @@ class Masks(Table):
             """, [mask_id])
             return await cursor.fetchall()
 
+class Reasons(Table):
+    async def add(self,
+            key:   str,
+            value: str):
+
+        async with aiosqlite.connect(self._db_location) as db:
+            await db.execute("""
+                INSERT INTO reasons (key, value)
+                VALUES (?, ?)
+            """, [key, value])
+            await db.commit()
+
+    async def has_key(self, key: str) -> bool:
+        async with aiosqlite.connect(self._db_location) as db:
+            cursor = await db.execute("""
+                SELECT 1
+                FROM reasons
+                WHERE key=?
+            """, [key])
+            return bool(await cursor.fetchall())
+
+    async def list(self
+            ) -> List[Tuple[str, str]]:
+        async with aiosqlite.connect(self._db_location) as db:
+            cursor = await db.execute("""
+                SELECT key, value
+                FROM reasons
+            """)
+            return await cursor.fetchall()
+
+    async def delete(self, key:str):
+        async with aiosqlite.connect(self._db_location) as db:
+            cursor = await db.execute("""
+                DELETE
+                FROM reasons
+                WHERE key=?
+            """, [key])
+            await db.commit()
+
 class Database(object):
     def __init__(self, location: str):
-        self.masks = Masks(location)
+        self.masks   = Masks(location)
+        self.reasons = Reasons(location)
