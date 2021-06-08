@@ -128,6 +128,7 @@ class Server(BaseServer):
 
             # get all (mask, details) for matched IDs
             matches = [await self._database.masks.get(i) for i in match_ids]
+            types   = {d.type for m, d in matches}
 
             # sort by mask type, descending
             # this should order: exclude, dlethal, lethal, warn
@@ -168,13 +169,19 @@ class Server(BaseServer):
             elif d.type == MaskType.DLETHAL:
                 self.delayed_send.append((monotonic(), ban))
 
-            await self.send(build("PRIVMSG", [
-                self._config.channel,
-                (
-                    f"MASK: {d.type.name} mask {match_id} "
-                    f"{nick}!{user.user}@{user.host} {user.real}"
-                )
-            ]))
+            if (d.type == MaskType.EXCLUDE and
+                    len(types) == 1):
+                # we matched an EXCLUDE but no other types.
+                # do not log
+                pass
+            else:
+                await self.send(build("PRIVMSG", [
+                    self._config.channel,
+                    (
+                        f"MASK: {d.type.name} mask {match_id} "
+                        f"{nick}!{user.user}@{user.host} {user.real}"
+                    )
+                ]))
 
     async def line_read(self, line: Line):
         if line.command == RPL_WELCOME:
