@@ -95,21 +95,6 @@ class Server(BaseServer):
         })
         return whois_line.command == RPL_WHOISOPERATOR
 
-    async def _get_account(self, nickname: str):
-        await self.send(build("WHOIS", [nickname]))
-
-        whois_account = Response(RPL_WHOISACCOUNT, [SELF, Folded(nickname)])
-        whois_end     = Response(RPL_ENDOFWHOIS,    [SELF, Folded(nickname)])
-        #:lithium.libera.chat 330 sandcat sandcat sandcat :is logged in as
-        #:lithium.libera.chat 318 sandcat sandcat :End of /WHOIS list.
-
-        whois_line = await self.wait_for({
-            whois_end, whois_account
-        })
-        if whois_line.command == RPL_WHOISACCOUNT:
-            return whois_line.params[2]
-        return None
-
     async def _mask_match(self,
             nick:  str,
             user:  User,
@@ -211,6 +196,13 @@ class Server(BaseServer):
             # n nick changes
             await self.send(build("MODE", [self.nickname, "-s+s", "+Fcn"]))
 
+        elif line.command == RPL_WHOISACCOUNT:
+            nick = line.params[1]
+            account = line.params[2]
+
+            if nick in self._users:
+                self._users[nick].account = account
+
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and
                 self.is_me(line.params[0])):
@@ -237,15 +229,16 @@ class Server(BaseServer):
                 real = p_cliconn.group("real")
                 # the regex might not have an `ip` group
                 ip: Optional[str] = p_cliconn.groupdict().get("ip", None)
-                account = await self._get_account(nick)
 
                 if ip == "0":
                     # remote i-line spoof
                     ip = None
 
-                user = User(user, host, real, ip, account)
+                user = User(user, host, real, ip)
                 # we hold on to nick:User of all connected users
                 self._users[nick] = user
+                # send a WHOIS to check accountname
+                await self.send(build("WHOIS", [nick]))
 
                 self.to_check.append((monotonic(), nick, user, Event.CONNECT))
 
