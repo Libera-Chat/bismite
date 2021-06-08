@@ -95,6 +95,11 @@ class Server(BaseServer):
         })
         return whois_line.command == RPL_WHOISOPERATOR
 
+    async def _idle_reset(self):
+        # send ourselves a PM to reset our idle time
+        if self._config.antiidle:
+            await self.send(build("PRIVMSG", [self.nickname, "hello self"]))
+
     async def _mask_match(self,
             nick:  str,
             user:  User,
@@ -230,6 +235,7 @@ class Server(BaseServer):
                 self._users[nick] = user
 
                 self.to_check.append((monotonic(), nick, user, Event.CONNECT))
+                await self._idle_reset()
 
             elif p_cliexit is not None:
                 nick = p_cliexit.group("nick")
@@ -238,6 +244,7 @@ class Server(BaseServer):
                     # .connected is used to not match clients that disconnect
                     # too quickly (e.g. due to OPM murder)
                     user.connected = False
+                await self._idle_reset()
 
             elif p_clinick is not None:
                 old_nick = p_clinick.group("old")
@@ -250,6 +257,7 @@ class Server(BaseServer):
                     self.to_check.append(
                         (monotonic(), new_nick, user, Event.NICK)
                     )
+                await self._idle_reset()
 
     async def cmd(self,
             who:     str,
