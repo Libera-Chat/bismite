@@ -317,6 +317,11 @@ class Server(BaseServer):
                 else:
                     reason = args[end:].strip()
                     if reason:
+                        # if there's no explicit oper reason, assume this
+                        # is an oper reason. safer than assuming public.
+                        if not "|" in reason:
+                            reason = f"|{reason}"
+
                         mask_id = await self._database.masks.add(
                             nick, mask, reason
                         )
