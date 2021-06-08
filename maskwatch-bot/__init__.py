@@ -112,6 +112,8 @@ class Server(BaseServer):
         for mask_id, (pattern, flags) in self._compiled_masks.items():
             for ref in references:
                 if ((not event == Event.NICK or "N" in flags) and
+                        (not user.account or not "a" in flags) and
+                        (user.account or not "A" in flags) and
                         pattern.search(ref)):
                     matches.append(mask_id)
         return matches
@@ -201,6 +203,13 @@ class Server(BaseServer):
             # n nick changes
             await self.send(build("MODE", [self.nickname, "-s+s", "+Fcn"]))
 
+        elif line.command == RPL_WHOISACCOUNT:
+            nick = line.params[1]
+            account = line.params[2]
+
+            if nick in self._users:
+                self._users[nick].account = account
+
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and
                 self.is_me(line.params[0])):
@@ -235,6 +244,8 @@ class Server(BaseServer):
                 user = User(user, host, real, ip)
                 # we hold on to nick:User of all connected users
                 self._users[nick] = user
+                # send a WHOIS to check accountname
+                await self.send(build("WHOIS", [nick]))
 
                 self.to_check.append((monotonic(), nick, user, Event.CONNECT))
 
