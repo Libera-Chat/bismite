@@ -339,11 +339,11 @@ class Server(BaseServer):
         if mask_id_s.isdigit():
             mask_id = int(mask_id_s)
             if await self._database.masks.has_id(mask_id):
+                mask, _   = await self._database.masks.get(mask_id)
                 enabled   = await self._database.masks.toggle(nick, mask_id)
                 enabled_s = "enabled" if enabled else "disabled"
 
                 if enabled:
-                    mask, _      = await self._database.masks.get(mask_id)
                     cmask, flags = mask_compile(mask)
                     self._compiled_masks[mask_id] = (cmask, flags)
                     self._compiled_masks = OrderedDict(
@@ -352,7 +352,7 @@ class Server(BaseServer):
                 else:
                     del self._compiled_masks[mask_id]
 
-                log = f"{nick} TOGGLEMASK: {enabled_s} mask \x02#{mask_id}\x02"
+                log = f"{nick} TOGGLEMASK: {enabled_s} mask \x02{mask}\x02"
                 await self.send(build("PRIVMSG", [self._config.channel, log]))
                 return [f"mask {mask_id} {enabled_s}"]
             else:
