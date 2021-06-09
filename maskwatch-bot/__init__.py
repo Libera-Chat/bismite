@@ -98,15 +98,9 @@ class Server(BaseServer):
 
     async def _format(self, string: str):
         # expand reason templates
-        # this bit might be a little janky
         while "$" in string:
-            for part in string.split():
-                if part.startswith("$"):
-                    if len(part) < 2:
-                        # we can't get a template from only '$'
-                        continue
-                    if part[1:].lower() in self._reasons:
-                        string = string.replace(part, self._reasons[part[1:].lower()])
+            for k, v in self._reasons.items():
+                string = string.replace(f"${k}", v)
         return string.lstrip()
 
     async def _mask_match(self,
