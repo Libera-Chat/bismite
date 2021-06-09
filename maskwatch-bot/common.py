@@ -9,6 +9,7 @@ class User(object):
     host: str
     real: str
     ip: Optional[str]
+    account: Optional[str] = None
 
     connected: bool = True
 

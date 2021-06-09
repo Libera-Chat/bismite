@@ -103,6 +103,11 @@ class Server(BaseServer):
                 string = string.replace(f"${k}", v)
         return string.lstrip()
 
+    async def _idle_reset(self):
+        # send ourselves a PM to reset our idle time
+        if self._config.antiidle:
+            await self.send(build("PRIVMSG", [self.nickname, "hello self"]))
+
     async def _mask_match(self,
             nick:  str,
             user:  User,
@@ -120,6 +125,8 @@ class Server(BaseServer):
         for mask_id, (pattern, flags) in self._compiled_masks.items():
             for ref in references:
                 if ((not event == Event.NICK or "N" in flags) and
+                        (not user.account or not "a" in flags) and
+                        (user.account or not "A" in flags) and
                         pattern.search(ref)):
                     matches.append(mask_id)
         return matches
@@ -129,6 +136,7 @@ class Server(BaseServer):
             user:  User,
             event: Event):
 
+        await self._idle_reset()
         match_ids = await self._mask_match(nick, user, event)
         if match_ids:
             for match_id in match_ids:
@@ -136,6 +144,7 @@ class Server(BaseServer):
 
             # get all (mask, details) for matched IDs
             matches = [await self._database.masks.get(i) for i in match_ids]
+            types   = {d.type for m, d in matches}
 
             # sort by mask type, descending
             # this should order: exclude, dlethal, lethal, warn
@@ -170,13 +179,19 @@ class Server(BaseServer):
             elif d.type == MaskType.DLETHAL:
                 self.delayed_send.append((monotonic(), ban))
 
-            await self.send(build("PRIVMSG", [
-                self._config.channel,
-                (
-                    f"MASK: {d.type.name} mask {match_id} "
-                    f"{nick}!{user.user}@{user.host} {user.real}"
-                )
-            ]))
+            if (d.type == MaskType.EXCLUDE and
+                    len(types) == 1):
+                # we matched an EXCLUDE but no other types.
+                # do not log
+                pass
+            else:
+                await self.send(build("PRIVMSG", [
+                    self._config.channel,
+                    (
+                        f"MASK: {d.type.name} mask {match_id} "
+                        f"{nick}!{user.user}@{user.host} {user.real}"
+                    )
+                ]))
 
     async def line_read(self, line: Line):
         if line.command == RPL_WELCOME:
@@ -199,6 +214,13 @@ class Server(BaseServer):
             # c near cliconn
             # n nick changes
             await self.send(build("MODE", [self.nickname, "-s+s", "+Fcn"]))
+
+        elif line.command == RPL_WHOISACCOUNT:
+            nick = line.params[1]
+            account = line.params[2]
+
+            if nick in self._users:
+                self._users[nick].account = account
 
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and
@@ -234,6 +256,8 @@ class Server(BaseServer):
                 user = User(user, host, real, ip)
                 # we hold on to nick:User of all connected users
                 self._users[nick] = user
+                # send a WHOIS to check accountname
+                await self.send(build("WHOIS", [nick]))
 
                 self.to_check.append((monotonic(), nick, user, Event.CONNECT))
 
@@ -345,11 +369,11 @@ class Server(BaseServer):
         if mask_id_s.isdigit():
             mask_id = int(mask_id_s)
             if await self._database.masks.has_id(mask_id):
+                mask, _   = await self._database.masks.get(mask_id)
                 enabled   = await self._database.masks.toggle(nick, mask_id)
                 enabled_s = "enabled" if enabled else "disabled"
 
                 if enabled:
-                    mask, _      = await self._database.masks.get(mask_id)
                     cmask, flags = mask_compile(mask)
                     self._compiled_masks[mask_id] = (cmask, flags)
                     self._compiled_masks = OrderedDict(
@@ -358,7 +382,7 @@ class Server(BaseServer):
                 else:
                     del self._compiled_masks[mask_id]
 
-                log = f"{nick} TOGGLEMASK: {enabled_s} mask \x02#{mask_id}\x02"
+                log = f"{nick} TOGGLEMASK: {enabled_s} mask \x02{mask}\x02"
                 await self.send(build("PRIVMSG", [self._config.channel, log]))
                 return [f"mask {mask_id} {enabled_s}"]
             else:

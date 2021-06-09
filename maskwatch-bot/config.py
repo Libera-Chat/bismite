@@ -22,6 +22,7 @@ class Config(object):
     cliconnre: Pattern
     cliexitre: Pattern
     clinickre: Pattern
+    antiidle:  bool
 
 def load(filepath: str):
     with open(filepath) as file:
@@ -61,5 +62,6 @@ def load(filepath: str):
         config_yaml["bancmd"],
         cliconnre,
         cliexitre,
-        clinickre
+        clinickre,
+        config_yaml["antiidle"],
     )
