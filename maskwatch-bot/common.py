@@ -73,3 +73,30 @@ def mask_find(s: str):
                 return end
     else:
         raise ValueError("pattern delim not found")
+
+SECONDS_MINUTES = 60
+SECONDS_HOURS   = SECONDS_MINUTES*60
+SECONDS_DAYS    = SECONDS_HOURS*24
+SECONDS_WEEKS   = SECONDS_DAYS*7
+
+def to_pretty_time(total_seconds: int) -> str:
+    weeks, days      = divmod(total_seconds, SECONDS_WEEKS)
+    days, hours      = divmod(days, SECONDS_DAYS)
+    hours, minutes   = divmod(hours, SECONDS_HOURS)
+    minutes, seconds = divmod(minutes, SECONDS_MINUTES)
+
+    units = list(filter(
+        lambda u: u[0] > 0,
+        [
+            (weeks,   "w"),
+            (days,    "d"),
+            (hours,   "h"),
+            (minutes, "m"),
+            (seconds, "s")
+        ]
+    ))
+    out = ""
+    for i, unit in units[:2]:
+        out += f"{i}{unit}"
+    return out
+
