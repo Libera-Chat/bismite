@@ -299,7 +299,7 @@ class Server(BaseServer):
         last_hit = ""
         if details.last_hit is not None:
             last_hit = to_pretty_time(int(time()-details.last_hit))
-            last_hit = f", {last_hit} ago"
+            last_hit = f", last hit {last_hit} ago"
 
         return (
             f"{str(mask_id).rjust(3)}:"
