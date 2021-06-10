@@ -98,10 +98,17 @@ class Server(BaseServer):
 
     async def _format(self, string: str):
         # expand reason templates
-        while "$" in string:
+        for i in range(10):
+            changed = False
             for k, v in self._reasons.items():
-                string = string.replace(f"${k}", v)
-        return string.lstrip()
+                k = f"${k}"
+                if k in string:
+                    changed = True
+                    string = string.replace(k, v)
+            if not changed:
+                # don't keep going if nothing changes
+                break
+        return string.rstrip()
 
     async def _idle_reset(self):
         # send ourselves a PM to reset our idle time
