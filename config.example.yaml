@@ -19,7 +19,3 @@ cliconnre: '^:[^!]+ NOTICE \* :\*{3} Notice -- Client connecting: (?P<nick>\S+) 
 cliexitre: '^:[^!]+ NOTICE \* :\*{3} Notice -- Client exiting: (?P<nick>\S+) '
 clinickre: '^:[^!]+ NOTICE \* :\*{3} Notice -- Nick change: From (?P<old>\S+) to (?P<new>\S+) .*$'
 antiidle: True
-
-reasons:
-  tos:  "You have violated Libera Chat's terms of service. Email bans@libera.chat with questions."
-  spam: "Spam is not welcome on Libera Chat. Email bans@libera.chat with questions."

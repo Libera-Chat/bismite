@@ -23,7 +23,6 @@ class Config(object):
     cliexitre: Pattern
     clinickre: Pattern
     antiidle:  bool
-    reasons: Dict[str, str]
 
 def load(filepath: str):
     with open(filepath) as file:
@@ -65,5 +64,4 @@ def load(filepath: str):
         cliexitre,
         clinickre,
         config_yaml["antiidle"],
-        config_yaml.get("reasons", {})
     )

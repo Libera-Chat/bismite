@@ -19,7 +19,14 @@ $ python3 -m maskwatch-bot config.yaml
 ## quick usage examples
 
 ```
-<jess> addmask /^jesstest!/ Please do not spam|!dnsbl
+<jess> addreason spam Spam is not welcome on Libera Chat. Email $email with questions.
+-bismite- added $spam
+<jess> addreason email bans@libera.chat
+-bismite- added $email
+<jess> listreason
+-bismite- $spam: Spam is not welcome on Libera Chat. Email $email with questions.
+-bismite- $email: bans@libera.chat
+<jess> addmask /^jesstest!/ $spam|!dnsbl
 -bismite- added 1
 <jess> listmask
 -bismite-   1: /^jesstest!/ (0 hits) WARN [$spam|!dnsbl]
@@ -50,6 +57,22 @@ delimiters on `/<regex>/` can be any non-alphanumeric character, e.g.
 ### TOGGLEMASK
 ```
 /msg bismite togglemask <id>
+```
+
+### ADDREASON
+```
+/msg bismite addreason <alias> <text>
+```
+adds a reason template that can be used in mask reasons (see above example)
+
+### DELREASON
+```
+/msg bismite delreason <alias>
+```
+
+### LISTREASON
+```
+/msg bismite listreason
 ```
 
 ## mask types
