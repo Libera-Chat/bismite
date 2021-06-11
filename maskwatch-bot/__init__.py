@@ -41,6 +41,7 @@ class Server(BaseServer):
         self.delayed_send: Deque[Tuple[int, str]] = deque()
 
         self.to_check: Deque[Tuple[float, str, User, Event]] = deque()
+        self._whois: Set[str] = set()
 
     def set_throttle(self, rate: int, time: float):
         # turn off throttling
@@ -210,11 +211,13 @@ class Server(BaseServer):
             await self.send(build("MODE", [self.nickname, "-s+s", "+Fcn"]))
 
         elif line.command == RPL_WHOISACCOUNT:
-            nick = line.params[1]
+            nick    = line.params[1]
             account = line.params[2]
 
-            if nick in self._users:
-                self._users[nick].account = account
+            if nick in self._whois:
+                self._whois.remove(nick)
+                if nick in self._users:
+                    self._users[nick].account = account
 
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and
@@ -252,11 +255,18 @@ class Server(BaseServer):
                 self._users[nick] = user
                 # send a WHOIS to check accountname
                 await self.send(build("WHOIS", [nick]))
+                self._whois.add(nick)
 
                 self.to_check.append((monotonic(), nick, user, Event.CONNECT))
 
             elif p_cliexit is not None:
                 nick = p_cliexit.group("nick")
+
+                # ignore pending whois results
+                # user using nick may have changed
+                if nick in self._whois:
+                    self._whois.remove(nick)
+
                 if nick in self._users:
                     user = self._users.pop(nick)
                     # .connected is used to not match clients that disconnect
@@ -267,9 +277,19 @@ class Server(BaseServer):
                 old_nick = p_clinick.group("old")
                 new_nick = p_clinick.group("new")
 
+                # ignore pending whois results
+                # user using nick may have changed
+                if old_nick in self._whois:
+                    self._whois.remove(old_nick)
+
                 if old_nick in self._users:
                     user = self._users.pop(old_nick)
                     self._users[new_nick] = user
+
+                    # refresh what we think this user's account is
+                    user.account = None
+                    await self.send(build("WHOIS", [new_nick]))
+                    self._whois.add(new_nick)
 
                     self.to_check.append(
                         (monotonic(), new_nick, user, Event.NICK)
