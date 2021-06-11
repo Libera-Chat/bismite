@@ -302,89 +302,86 @@ class Server(BaseServer):
             f" [{details.reason or ''}]"
         )
 
-    async def cmd_getmask(self, nick: str, args: str):
-        mask_id_s = args.split(None, 1)[0]
-        if mask_id_s.isdigit():
-            mask_id = int(mask_id_s)
-            if await self._database.masks.has_id(mask_id):
-                mask, d = await self._database.masks.get(mask_id)
-                history = await self._database.masks.history(mask_id)
-
-                outs = [self._mask_format(mask_id, mask, d)]
-                if history:
-                    outs.append("\x02changes:\x02")
-                for who, ts, change in history:
-                    tss = datetime.utcfromtimestamp(ts).isoformat()
-                    outs.append(
-                        f" {tss}"
-                        f" by \x02{who}\x02:"
-                        f" {change}"
-                    )
-                return outs
-            else:
-                return [f"unknown mask id {mask_id}"]
-        elif mask_id:
-            return ["that's not an id/number"]
-        else:
+    async def cmd_getmask(self, nick: str, sargs: str):
+        args = sargs.split(None, 1)
+        if not args:
             return ["please provide a mask id"]
+        elif not args[0].isdigit():
+            return ["that's not an id/number"]
+
+        mask_id = int(args[0])
+        if not await self._database.masks.has_id(mask_id):
+            return [f"unknown mask id {mask_id}"]
+        mask, d = await self._database.masks.get(mask_id)
+        history = await self._database.masks.history(mask_id)
+
+        outs = [self._mask_format(mask_id, mask, d)]
+        if history:
+            outs.append("\x02changes:\x02")
+        for who, ts, change in history:
+            tss = datetime.utcfromtimestamp(ts).isoformat()
+            outs.append(
+                f" {tss}"
+                f" by \x02{who}\x02:"
+                f" {change}"
+            )
+        return outs
 
     async def cmd_addmask(self, nick: str, args: str):
         args = args.lstrip()
-        if args:
-            end = mask_find(args)
-            if end > 0:
-                mask = format_strip(args[:end])
-                try:
-                    cmask, flags = mask_compile(mask)
-                except re.error as e:
-                    return [f"regex error: {str(e)}"]
-                else:
-                    reason = args[end:].strip()
-                    if reason:
-                        # if there's no explicit oper reason, assume this
-                        # is an oper reason. safer than assuming public.
-                        if not "|" in reason:
-                            reason = f"|{reason}"
-
-                        mask_id = await self._database.masks.add(
-                            nick, mask, reason
-                        )
-                        self._compiled_masks[mask_id] = (cmask, flags)
-                        return [f"added {mask_id}"]
-                    else:
-                        return ["please provide a reason"]
-            else:
-                return ["unterminated regexen"]
-        else:
+        if not args:
             return ["no args provided"]
 
-    async def cmd_togglemask(self, nick: str, args: str):
-        mask_id_s = args.split(None, 1)[0]
-        if mask_id_s.isdigit():
-            mask_id = int(mask_id_s)
-            if await self._database.masks.has_id(mask_id):
-                mask, _   = await self._database.masks.get(mask_id)
-                enabled   = await self._database.masks.toggle(nick, mask_id)
-                enabled_s = "enabled" if enabled else "disabled"
+        end = mask_find(args)
+        if end < 1:
+            return ["unterminated regexen"]
 
-                if enabled:
-                    cmask, flags = mask_compile(mask)
-                    self._compiled_masks[mask_id] = (cmask, flags)
-                    self._compiled_masks = OrderedDict(
-                        sorted(self._compiled_masks.items())
-                    )
-                else:
-                    del self._compiled_masks[mask_id]
-
-                log = f"{nick} TOGGLEMASK: {enabled_s} mask \x02{mask}\x02"
-                await self.send(build("PRIVMSG", [self._config.channel, log]))
-                return [f"mask {mask_id} {enabled_s}"]
-            else:
-                return [f"unknown mask id {mask_id}"]
-        elif mask_id:
-            return ["that's not an id/number"]
+        mask = format_strip(args[:end])
+        try:
+            cmask, flags = mask_compile(mask)
+        except re.error as e:
+            return [f"regex error: {str(e)}"]
         else:
+            reason = args[end:].strip()
+            if not reason:
+                return ["please provide a reason"]
+
+            # if there's no explicit oper reason, assume this
+                # is an oper reason. safer than assuming public.
+            if not "|" in reason:
+                reason = f"|{reason}"
+
+            mask_id = await self._database.masks.add(nick, mask, reason)
+            self._compiled_masks[mask_id] = (cmask, flags)
+            return [f"added {mask_id}"]
+
+    async def cmd_togglemask(self, nick: str, sargs: str):
+        args = sargs.split(None, 1)
+        if not args:
             return ["please provide a mask id"]
+        elif not args[0].isdigit():
+            return ["that's not an id/number"]
+
+        mask_id = int(args[0])
+        if not await self._database.masks.has_id(mask_id):
+            return [f"unknown mask id {mask_id}"]
+
+        mask, _   = await self._database.masks.get(mask_id)
+        enabled   = await self._database.masks.toggle(nick, mask_id)
+        enabled_s = "enabled" if enabled else "disabled"
+
+        if enabled:
+            cmask, flags = mask_compile(mask)
+            self._compiled_masks[mask_id] = (cmask, flags)
+            self._compiled_masks = OrderedDict(
+                sorted(self._compiled_masks.items())
+            )
+        else:
+            del self._compiled_masks[mask_id]
+
+        log = f"{nick} TOGGLEMASK: {enabled_s} mask \x02{mask}\x02"
+        await self.send(build("PRIVMSG", [self._config.channel, log]))
+        return [f"mask {mask_id} {enabled_s}"]
 
     async def cmd_setmask(self, nick: str, sargs: str):
         args = sargs.split()
@@ -394,25 +391,19 @@ class Server(BaseServer):
             return ["that's not an id/number"]
         elif args[1].upper() in MaskType:
             return [f"unknown mask type {args[1].upper()}"]
-        else:
-            mask_id   = int(args[0])
-            mask_type = MaskType[args[1].upper()]
-            if await self._database.masks.has_id(mask_id):
-                mask, d = await self._database.masks.get(mask_id)
-                if not d.type == mask_type:
-                    await self._database.masks.set_type(
-                        nick, mask_id, mask_type
-                    )
-                    log = f"{nick} SETMASK: type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
-                    await self.send(build("PRIVMSG", [self._config.channel, log]))
-                    return [
-                        f"{mask} changed from "
-                        f"{d.type.name} to {mask_type.name}"
-                    ]
-                else:
-                    return [f"{mask} is already {mask_type.name}"]
-            else:
-                return [f"unknown mask id {mask_id}"]
+
+        mask_id   = int(args[0])
+        mask_type = MaskType[args[1].upper()]
+        if not await self._database.masks.has_id(mask_id):
+            return [f"unknown mask id {mask_id}"]
+        mask, d = await self._database.masks.get(mask_id)
+        if d.type == mask_type:
+            return [f"{mask} is already {mask_type.name}"]
+
+        await self._database.masks.set_type(nick, mask_id, mask_type)
+        log = f"{nick} SETMASK: type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
+        await self.send(build("PRIVMSG", [self._config.channel, log]))
+        return [f"{mask} changed from {d.type.name} to {mask_type.name}"]
 
     async def cmd_listmask(self, nick: str, args: str):
         outs: List[str] = []
