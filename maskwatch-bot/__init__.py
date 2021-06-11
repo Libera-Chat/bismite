@@ -1,7 +1,7 @@
 import asyncio, re, traceback
 from collections import deque, OrderedDict
 from datetime    import datetime
-from time        import monotonic
+from time        import monotonic, time
 from typing      import Deque, Dict, List, Optional, Tuple
 from typing      import OrderedDict as TOrderedDict
 
@@ -16,6 +16,7 @@ from ircchallenge         import Challenge
 from ircrobots.formatting import strip as format_strip
 
 from .common   import Event, MaskType, User, mask_compile, mask_find
+from .common   import to_pretty_time
 from .config   import Config
 from .database import Database
 
@@ -294,10 +295,16 @@ class Server(BaseServer):
             mask:    str,
             details: str
             ) -> str:
+
+        last_hit = ""
+        if details.last_hit is not None:
+            last_hit = to_pretty_time(int(time()-details.last_hit))
+            last_hit = f", last hit {last_hit} ago"
+
         return (
             f"{str(mask_id).rjust(3)}:"
             f" \x02{mask}\x02"
-            f" ({details.hits} hits)"
+            f" ({details.hits} hits{last_hit})"
             f" {details.type.name}"
             f" [{details.reason or ''}]"
         )
