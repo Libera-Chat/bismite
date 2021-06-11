@@ -16,7 +16,7 @@ CREATE TABLE changes (
     change  TEXT NOT NULL
 );
 CREATE TABLE reasons (
-    key TEXT NOT NULL,
+    key   TEXT NOT NULL,
     value TEXT NOT NULL
 );
 COMMIT;
