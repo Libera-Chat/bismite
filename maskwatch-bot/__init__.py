@@ -231,7 +231,7 @@ class Server(BaseServer):
             await self.send(build("MODE", [self.nickname, "-s+s", "+Fcn"]))
 
         elif line.command == RPL_WHOISACCOUNT:
-            nick = line.params[1]
+            nick    = line.params[1]
             account = line.params[2]
 
             if nick in self._users:
@@ -278,6 +278,7 @@ class Server(BaseServer):
 
             elif p_cliexit is not None:
                 nick = p_cliexit.group("nick")
+
                 if nick in self._users:
                     user = self._users.pop(nick)
                     # .connected is used to not match clients that disconnect
@@ -291,6 +292,10 @@ class Server(BaseServer):
                 if old_nick in self._users:
                     user = self._users.pop(old_nick)
                     self._users[new_nick] = user
+
+                    # refresh what we think this user's account is
+                    user.account = None
+                    await self.send(build("WHOIS", [new_nick]))
 
                     self.to_check.append(
                         (monotonic(), new_nick, user, Event.NICK)
