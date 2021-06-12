@@ -25,6 +25,8 @@ RPL_RSACHALLENGE2      = "740"
 RPL_ENDOFRSACHALLENGE2 = "741"
 RPL_YOUREOPER          = "381"
 
+MAX_RECENT = 1000
+
 class Server(BaseServer):
     def __init__(self,
             bot:    BaseBot,
@@ -36,6 +38,7 @@ class Server(BaseServer):
         self._database = Database(config.database)
 
         self._users:          Dict[str, User] = {}
+        self._recent_masks:   Deque[Tuple[str]] = deque()
         self._compiled_masks: TOrderedDict[int, Tuple[Pattern, str]] \
             = OrderedDict()
         self._reasons:        Dict[str, str] = {}
@@ -128,6 +131,10 @@ class Server(BaseServer):
             # if the user has an IP and it doesn't match their visible 'host',
             # also match against that IP
             references.append(f"{nick}!{user.user}@{user.ip} {user.real}")
+
+        self._recent_masks.append(tuple(references))
+        if len(self._recent_masks) > MAX_RECENT:
+            self._recent_masks.popleft()
 
         matches: List[int] = []
         for mask_id, (pattern, flags) in self._compiled_masks.items():
@@ -373,7 +380,24 @@ class Server(BaseServer):
 
             mask_id = await self._database.masks.add(nick, mask, reason)
             self._compiled_masks[mask_id] = (cmask, flags)
-            return [f"added {mask_id}"]
+
+            # check/warn about how many users this will hit
+            matches = 0
+            samples = 0
+            for i in range(MAX_RECENT):
+                if i == len(self._recent_masks):
+                    break
+                samples += 1
+                for recent_mask in self._recent_masks[i]:
+                    if cmask.search(recent_mask):
+                        matches += 1
+                        # only breaks one level of `for`
+                        break
+
+            return [
+                f"added {mask_id} "
+                f"(hits {matches} out of last {samples} users)"
+            ]
 
     async def cmd_togglemask(self, nick: str, sargs: str):
         args = sargs.split(None, 1)
