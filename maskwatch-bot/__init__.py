@@ -16,7 +16,7 @@ from ircchallenge         import Challenge
 from ircrobots.formatting import strip as format_strip
 
 from .common   import Event, MaskType, User, mask_compile, mask_find
-from .common   import to_pretty_time
+from .common   import to_pretty_time, FLAGS_INCONEQUENTIAL
 from .config   import Config
 from .database import Database
 
@@ -38,8 +38,8 @@ class Server(BaseServer):
         self._database = Database(config.database)
 
         self._users:          Dict[str, User] = {}
-        self._recent_masks:   Deque[Tuple[str]] = deque()
-        self._compiled_masks: TOrderedDict[int, Tuple[Pattern, str]] \
+        self._recent_masks:   Deque[Tuple[List[str], Set[str]]] = deque()
+        self._compiled_masks: TOrderedDict[int, Tuple[Pattern, Set[str]]] \
             = OrderedDict()
         self._reasons:        Dict[str, str] = {}
 
@@ -125,24 +125,39 @@ class Server(BaseServer):
             event: Event
             ) -> List[int]:
 
-        references = [f"{nick}!{user.user}@{user.host} {user.real}"]
-        if (user.ip is not None and
-                not user.host == user.ip):
-            # if the user has an IP and it doesn't match their visible 'host',
-            # also match against that IP
-            references.append(f"{nick}!{user.user}@{user.ip} {user.real}")
+        uflags: Set[str] = set()
+        if user.account is not None:
+            uflags.add("a")
+        else:
+            uflags.add("A")
 
-        self._recent_masks.append(tuple(references))
+        if event == Event.NICK:
+            uflags.add("N")
+
+        references = [f"{nick}!{user.user}@{user.host} {user.real}"]
+        if user.ip is not None:
+            # has no i-line spoof
+            uflags.add("S")
+
+            if user.host == user.ip:
+                # if the user has an IP and IP != host, also match against IP
+                references.append(f"{nick}!{user.user}@{user.ip} {user.real}")
+        else:
+            # has an i-line spoof
+            uflags.add("s")
+
+        self._recent_masks.append((references, uflags))
         if len(self._recent_masks) > MAX_RECENT:
             self._recent_masks.popleft()
 
         matches: List[int] = []
         for mask_id, (pattern, flags) in self._compiled_masks.items():
+            nflags  = flags - uflags
+            nflags -= FLAGS_INCONEQUENTIAL
+            print(flags, uflags, nflags)
             for ref in references:
-                if ((not event == Event.NICK or "N" in flags) and
-                        (not user.account or not "a" in flags) and
-                        (user.account or not "A" in flags) and
-                        pattern.search(ref)):
+                # which flags does the pattern want that we've not got?
+                if not nflags and pattern.search(ref):
                     matches.append(mask_id)
         return matches
 
@@ -388,8 +403,11 @@ class Server(BaseServer):
                 if i == len(self._recent_masks):
                     break
                 samples += 1
-                for recent_mask in self._recent_masks[i]:
-                    if cmask.search(recent_mask):
+                recent_masks, uflags = self._recent_masks[i]
+                for recent_mask in recent_masks:
+                    nflags  = flags - uflags
+                    nflags -= FLAGS_INCONEQUENTIAL
+                    if not nflags and cmask.search(recent_mask):
                         matches += 1
                         # only breaks one level of `for`
                         break
