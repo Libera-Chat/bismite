@@ -154,7 +154,6 @@ class Server(BaseServer):
         for mask_id, (pattern, flags) in self._compiled_masks.items():
             nflags  = flags - uflags
             nflags -= FLAGS_INCONEQUENTIAL
-            print(flags, uflags, nflags)
             for ref in references:
                 # which flags does the pattern want that we've not got?
                 if not nflags and pattern.search(ref):
