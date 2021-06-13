@@ -45,7 +45,8 @@ class Server(BaseServer):
 
         self.delayed_send: Deque[Tuple[int, str]] = deque()
 
-        self.to_check: Deque[Tuple[float, str, User, Event]] = deque()
+        self.to_check: Deque[Tuple[float, str, User]] = deque()
+        self._nick_change_whois: Deque[str] = deque()
 
     def set_throttle(self, rate: int, time: float):
         # turn off throttling
@@ -237,6 +238,14 @@ class Server(BaseServer):
             if nick in self._users:
                 self._users[nick].account = account
 
+        elif line.command == RPL_ENDOFWHOIS:
+            nick = line.params[1]
+            if (self._nick_change_whois and
+                    self._nick_change_whois[0] == nick):
+                self._nick_change_whois.popleft()
+                user = self._users[nick]
+                await self.mask_check(nick, user, Event.NICK)
+
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and
                 self.is_me(line.params[0])):
@@ -274,7 +283,7 @@ class Server(BaseServer):
                 # send a WHOIS to check accountname
                 await self.send(build("WHOIS", [nick]))
 
-                self.to_check.append((monotonic(), nick, user, Event.CONNECT))
+                self.to_check.append((monotonic(), nick, user))
 
             elif p_cliexit is not None:
                 nick = p_cliexit.group("nick")
@@ -294,12 +303,9 @@ class Server(BaseServer):
                     self._users[new_nick] = user
 
                     # refresh what we think this user's account is
+                    self._nick_change_whois.append(new_nick)
                     user.account = None
                     await self.send(build("WHOIS", [new_nick]))
-
-                    self.to_check.append(
-                        (monotonic(), new_nick, user, Event.NICK)
-                    )
 
     async def cmd(self,
             who:     str,
