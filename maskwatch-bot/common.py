@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 from enum        import Enum, IntEnum
-from typing      import Pattern, Optional, Tuple
+from typing      import Pattern, Optional, Set, Tuple
 
 @dataclass
 class User(object):
@@ -35,17 +35,18 @@ class MaskDetails(object):
     last_hit: Optional[int]
 
 
+FLAGS_INCONEQUENTIAL = set("i")
 def mask_compile(
         pattern: str
-        ) -> Tuple[Pattern, str]:
+        ) -> Tuple[Pattern, Set[str]]:
     p, sflags = pattern.rsplit(pattern[0], 1)
     pattern   = p[1:]
 
-    flags = 0
+    rflags = 0
     if "i" in sflags:
-        flags |= re.I
+        rflags |= re.I
 
-    return re.compile(pattern, flags), sflags
+    return re.compile(pattern, rflags), set(sflags)
 
 def _find_unescaped(s: str, c: str):
     i = 0
