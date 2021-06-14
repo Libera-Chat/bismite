@@ -1,4 +1,4 @@
-# maskwatch-bot
+# bismite
 
 IRC `nick!user@host real` watcher, akin to Atheme's OperServ `RWATCH`.
 
@@ -13,7 +13,7 @@ $ sqlite3 ~/.masks.db < make-database.sql
 ## running
 
 ```
-$ python3 -m maskwatch-bot config.yaml
+$ python3 -m bismite config.yaml
 ```
 
 ## quick usage examples
