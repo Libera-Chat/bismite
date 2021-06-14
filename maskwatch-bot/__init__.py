@@ -288,7 +288,7 @@ class Server(BaseServer):
             await self.send(build("PRIVMSG", [self._config.channel, out]))
 
             cmd, _, args = line.params[1].partition(" ")
-            await self.cmd(line.hostmask.nickname, cmd.lower(), args)
+            await self.cmd(line.hostmask, cmd.lower(), args)
 
         else:
 
