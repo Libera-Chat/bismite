@@ -350,7 +350,7 @@ class Server(BaseServer):
             opername = None if opername == "<grant>" else opername
             attrib  = f"cmd_{command}"
             if hasattr(self, attrib):
-                outs = await getattr(self, attrib)(opername, who._source, args)
+                outs = await getattr(self, attrib)(opername, str(who), args)
                 for out in outs:
                     await self.send(build("NOTICE", [who.nickname, out]))
             else:
