@@ -28,6 +28,8 @@ RPL_YOUREOPER          = "381"
 
 MAX_RECENT = 1000
 
+RE_OPERNAME = re.compile(r"^is opered as (\S+)(?:,|$)")
+
 class Server(BaseServer):
     def __init__(self,
             bot:    BaseBot,
@@ -102,7 +104,7 @@ class Server(BaseServer):
         })
         # return the oper name or nothing
         if whois_line.command == RPL_WHOISOPERATOR:
-            match = re.search(r"^is opered as (\S+)(?:,|$)", whois_line.params[2])
+            match = RE_OPERNAME.search(whois_line.params[2])
             if match is not None:
                 return match.group(1)
         return None
