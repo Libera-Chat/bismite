@@ -6,12 +6,11 @@ from typing      import Deque, Dict, List, Optional, Tuple
 from typing      import OrderedDict as TOrderedDict
 
 
-from irctokens import build, Line
+from irctokens import build, Line, Hostmask
 from ircrobots import Bot as BaseBot
 from ircrobots import Server as BaseServer
 
 from ircstates.numerics   import *
-from ircstates            import Hostmask
 from ircrobots.matching   import Response, ANY, Folded, SELF
 from ircchallenge         import Challenge
 
