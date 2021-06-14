@@ -43,6 +43,10 @@ def mask_compile(
     pattern   = p[1:]
 
     rflags = 0
+    if not "N" in sflags:
+        # only match if N not in sflags
+        sflags.add("n")
+
     if "i" in sflags:
         rflags |= re.I
 

@@ -132,9 +132,8 @@ class Server(BaseServer):
         else:
             uflags.add("A")
 
-        if event in {Event.NICK, Event.CONNECT}:
-            # trigger /N on both connect and nick change
-            uflags.add("N")
+        if event == Event.CONNECT:
+            uflags.add("n")
 
         references = [f"{nick}!{user.user}@{user.host} {user.real}"]
         if user.ip is not None:
