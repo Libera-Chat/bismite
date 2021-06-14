@@ -515,6 +515,49 @@ class Server(BaseServer):
             outs.append(f"${key}: \x02{value}\x02")
         return outs or ["no reason templates"]
 
+    async def cmd_testmask(self, nick: str, args: str):
+        args = args.lstrip()
+        if not args:
+            return ["no args provided"]
+
+        end = mask_find(args)
+        if end < 1:
+            return ["unterminated regexen"]
+
+        mask = format_strip(args[:end])
+        try:
+            cmask, flags = mask_compile(mask)
+        except re.error as e:
+            return [f"regex error: {str(e)}"]
+
+        samples = 0
+        matches: List[str] = []
+        for i in range(MAX_RECENT):
+            if i == len(self._recent_masks):
+                break
+            samples += 1
+            recent_masks, uflags = self._recent_masks[i]
+            for recent_mask in recent_masks:
+                nflags  = flags - uflags
+                nflags -= FLAGS_INCONEQUENTIAL
+                if not nflags and cmask.search(recent_mask):
+                    matches.append(recent_mask)
+                    # only breaks one level of `for`
+                    break
+
+        outs: List[str] = []
+        for match in matches[:10]:
+            outs.append(f" {match}")
+
+        if outs:
+            outs.insert(0, f"mask \x02{mask}\x02 matches...")
+            if len(matches) > 10:
+                outs.append(f" (and {len(matches)-10} more)")
+            outs.append(f"... out of {samples}")
+        else:
+            outs.insert(0, f"mask \x02{mask}\x02 matches 0 out of {samples}")
+        return outs
+
     def line_preread(self, line: Line):
         print(f"< {line.format()}")
     def line_presend(self, line: Line):
