@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from enum        import Enum, IntEnum
 from typing      import Pattern, Optional, Set, Tuple
 
+from ircrobots.formatting import strip as format_strip
+
 @dataclass
 class User(object):
     user: str
@@ -37,16 +39,16 @@ class MaskDetails(object):
 
 FLAGS_INCONEQUENTIAL = set("i")
 def mask_compile(
-        pattern: str
+        mask:  str
         ) -> Tuple[Pattern, Set[str]]:
-    p, sflags = pattern.rsplit(pattern[0], 1)
-    pattern   = p[1:]
+
+    mask, sflags = mask.rsplit(mask[0], 1)
 
     rflags = 0
     if "i" in sflags:
         rflags |= re.I
 
-    return re.compile(pattern, rflags), set(sflags)
+    return re.compile(mask[1:], rflags), set(sflags)
 
 def _find_unescaped(s: str, c: str):
     i = 0
@@ -74,6 +76,21 @@ def mask_find(s: str):
                 return end
     else:
         raise ValueError("pattern delim not found")
+
+def mask_token(
+        input: str
+        ) -> Tuple[Pattern, Set[str], str]:
+
+    input = input.lstrip()
+    if not input:
+        raise ValueError("no input provided")
+
+    end = mask_find(input)
+    if end < 1:
+        raise ValueError("unterminated regexen")
+
+    mask = format_strip(input[:end])
+    return mask, input[end+1:]
 
 SECONDS_MINUTES = 60
 SECONDS_HOURS   = SECONDS_MINUTES*60

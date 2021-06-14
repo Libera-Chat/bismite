@@ -13,12 +13,13 @@ from ircrobots import Server as BaseServer
 from ircstates.numerics   import *
 from ircrobots.matching   import Response, ANY, Folded, SELF
 from ircchallenge         import Challenge
-from ircrobots.formatting import strip as format_strip
 
-from .common   import Event, MaskType, User, mask_compile, mask_find
-from .common   import to_pretty_time, FLAGS_INCONEQUENTIAL
 from .config   import Config
 from .database import Database
+
+from .common   import Event, MaskType, User, to_pretty_time
+from .common   import mask_compile, mask_find, mask_token
+from .common   import FLAGS_INCONEQUENTIAL
 
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
@@ -394,21 +395,13 @@ class Server(BaseServer):
         return outs
 
     async def cmd_addmask(self, nick: str, args: str):
-        args = args.lstrip()
-        if not args:
-            return ["no args provided"]
-
-        end = mask_find(args)
-        if end < 1:
-            return ["unterminated regexen"]
-
-        mask = format_strip(args[:end])
         try:
+            mask, args   = mask_token(args)
             cmask, flags = mask_compile(mask)
         except re.error as e:
             return [f"regex error: {str(e)}"]
         else:
-            reason = args[end:].strip()
+            reason = args
             if not reason:
                 return ["please provide a reason"]
 
@@ -528,6 +521,41 @@ class Server(BaseServer):
         for key, value in self._reasons.items():
             outs.append(f"${key}: \x02{value}\x02")
         return outs or ["no reason templates"]
+
+    async def cmd_testmask(self, nick: str, args: str):
+        try:
+            mask, _      = mask_token(args)
+            cmask, flags = mask_compile(mask)
+        except Exception as e:
+            return [f"failed to add mask: {str(e)}"]
+
+        samples = 0
+        matches: List[str] = []
+        for i in range(MAX_RECENT):
+            if i == len(self._recent_masks):
+                break
+            samples += 1
+            recent_masks, uflags = self._recent_masks[i]
+            for recent_mask in recent_masks:
+                nflags  = flags - uflags
+                nflags -= FLAGS_INCONEQUENTIAL
+                if not nflags and cmask.search(recent_mask):
+                    matches.append(recent_mask)
+                    # only breaks one level of `for`
+                    break
+
+        outs: List[str] = []
+        for match in matches[:10]:
+            outs.append(f" {match}")
+
+        if outs:
+            outs.insert(0, f"mask \x02{mask}\x02 matches...")
+            if len(matches) > 10:
+                outs.append(f" (and {len(matches)-10} more)")
+            outs.append(f"... out of {samples}")
+        else:
+            outs.insert(0, f"mask \x02{mask}\x02 matches 0 out of {samples}")
+        return outs
 
     def line_preread(self, line: Line):
         print(f"< {line.format()}")
