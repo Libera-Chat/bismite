@@ -11,7 +11,7 @@ from ircrobots import Bot as BaseBot
 from ircrobots import Server as BaseServer
 
 from ircstates.numerics   import *
-from ircstates            import User
+from ircstates            import Hostmask
 from ircrobots.matching   import Response, ANY, Folded, SELF
 from ircchallenge         import Challenge
 from ircrobots.formatting import strip as format_strip
@@ -253,7 +253,7 @@ class Server(BaseServer):
                     self._users[new_nick] = user
 
     async def cmd(self,
-            who:     User,
+            who:     Hostmask,
             command: str,
             args:    str):
 
@@ -385,7 +385,6 @@ class Server(BaseServer):
                     await self._database.masks.set_type(
                         nick, oper, mask_id, mask_type
                     )
-                    
                     if oper is not None:
                         who = f"{nick} ({oper})"
                     else:
