@@ -132,7 +132,8 @@ class Server(BaseServer):
         else:
             uflags.add("A")
 
-        if event == Event.NICK:
+        if event in {Event.NICK, Event.CONNECT}:
+            # trigger /N on both connect and nick change
             uflags.add("N")
 
         references = [f"{nick}!{user.user}@{user.host} {user.real}"]
