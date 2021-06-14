@@ -172,14 +172,15 @@ class Server(BaseServer):
                 await self._database.masks.hit(match_id)
 
             # get all (mask, details) for matched IDs
-            matches = [await self._database.masks.get(i) for i in match_ids]
-            types   = {d.type for m, d in matches}
+            matches = [(i, await self._database.masks.get(i)) \
+                for i in match_ids]
+            types   = {d.type for i, (m, d) in matches}
 
             # sort by mask type, descending
             # this should order: exclude, dlethal, lethal, warn
-            matches.sort(key=lambda m: m[1].type, reverse=True)
+            matches.sort(key=lambda m: m[1][1].type, reverse=True)
 
-            mask, d = matches[0]
+            mask_id, (mask, d) = matches[0]
 
             ident  = user.user
             # if the user doesn't have identd, bin the whole host
@@ -217,7 +218,7 @@ class Server(BaseServer):
                 await self.send(build("PRIVMSG", [
                     self._config.channel,
                     (
-                        f"MASK: {d.type.name} mask {match_id} "
+                        f"MASK: {d.type.name} mask {mask_id} "
                         f"{nick}!{user.user}@{user.host} {user.real}"
                     )
                 ]))
