@@ -256,9 +256,23 @@ class Server(BaseServer):
             nick = line.params[1]
             if (self._nick_change_whois and
                     self._nick_change_whois[0] == nick):
+
                 self._nick_change_whois.popleft()
-                user = self._users[nick]
-                await self.mask_check(nick, user, Event.NICK)
+
+                # this should be safe.
+                # if the connection using `nick` has changed between sending
+                # whois and getting a response, the whois should be for the
+                # new user of the nick
+
+                # < nick1 NICK nick2
+                # > WHOIS nick2
+                # < nick2 NICK nick3
+                # < nick4 NICK nick2
+                # < [response for new nick2 user]
+
+                if nick in self._users:
+                    user = self._users[nick]
+                    await self.mask_check(nick, user, Event.NICK)
 
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and
