@@ -37,7 +37,7 @@ class MaskDetails(object):
     last_hit: Optional[int]
 
 
-FLAGS_INCONEQUENTIAL = set("i")
+FLAGS_INCONSEQUENTIAL = set("i")
 def mask_compile(
         mask:  str
         ) -> Tuple[Pattern, Set[str]]:
@@ -48,7 +48,8 @@ def mask_compile(
     if "i" in sflags:
         rflags |= re.I
 
-    flags = set(sflags)
+    flags  = set(sflags)
+    flags -= FLAGS_INCONSEQUENTIAL
 
     # flags should be expressed as "only match x" rather than "also match x"
     # "N" means "also match nick changes" but "n" means "only match connect"

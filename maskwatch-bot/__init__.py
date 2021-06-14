@@ -19,7 +19,6 @@ from .database import Database
 
 from .common   import Event, MaskType, User, to_pretty_time
 from .common   import mask_compile, mask_find, mask_token
-from .common   import FLAGS_INCONEQUENTIAL
 
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
@@ -154,8 +153,7 @@ class Server(BaseServer):
 
         matches: List[int] = []
         for mask_id, (pattern, flags) in self._compiled_masks.items():
-            nflags  = flags - uflags
-            nflags -= FLAGS_INCONEQUENTIAL
+            nflags = flags - uflags
             for ref in references:
                 # which flags does the pattern want that we've not got?
                 if not nflags and pattern.search(ref):
@@ -422,8 +420,7 @@ class Server(BaseServer):
                 samples += 1
                 recent_masks, uflags = self._recent_masks[i]
                 for recent_mask in recent_masks:
-                    nflags  = flags - uflags
-                    nflags -= FLAGS_INCONEQUENTIAL
+                    nflags = flags - uflags
                     if not nflags and cmask.search(recent_mask):
                         matches += 1
                         # only breaks one level of `for`
@@ -540,8 +537,7 @@ class Server(BaseServer):
             samples += 1
             recent_masks, uflags = self._recent_masks[i]
             for recent_mask in recent_masks:
-                nflags  = flags - uflags
-                nflags -= FLAGS_INCONEQUENTIAL
+                nflags = flags - uflags
                 if not nflags and cmask.search(recent_mask):
                     matches.append(recent_mask)
                     # only breaks one level of `for`
