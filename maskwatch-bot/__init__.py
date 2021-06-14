@@ -23,7 +23,7 @@ from .common   import mask_compile, mask_find, mask_token
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
 RPL_ENDOFRSACHALLENGE2 = "741"
-RPL_WHOISSPECIAL       = "320"
+RPL_WHOISOPERATOR      = "313"
 RPL_YOUREOPER          = "381"
 
 MAX_RECENT = 1000
@@ -92,7 +92,7 @@ class Server(BaseServer):
     async def _get_oper(self, nickname: str):
         await self.send(build("WHOIS", [nickname]))
 
-        whois_oper = Response(RPL_WHOISSPECIAL, [SELF, Folded(nickname)])
+        whois_oper = Response(RPL_WHOISOPERATOR, [SELF, Folded(nickname)])
         whois_end  = Response(RPL_ENDOFWHOIS,    [SELF, Folded(nickname)])
         #:lithium.libera.chat 320 sandcat sandcat :is opered as sandcat, privset sandcat
         #:lithium.libera.chat 318 sandcat sandcat :End of /WHOIS list.
@@ -101,8 +101,11 @@ class Server(BaseServer):
             whois_end, whois_oper
         })
         # return the oper name or nothing
-        if whois_line.command == RPL_WHOISSPECIAL and whois_line.params[2].startswith("is opered as"):
-            return whois_line.params[2].split(",")[0].split()[-1]
+        if whois_line.command == RPL_WHOISOPERATOR:
+            match = re.search(r"^is opered as (\S+)(?:,|$)", whois_line.params[2])
+            print(match)
+            if match is not None:
+                return match.group(1)
         return None
 
     async def _format(self, string: str):
@@ -389,13 +392,17 @@ class Server(BaseServer):
         outs = [self._mask_format(mask_id, mask, d)]
         if history:
             outs.append("\x02changes:\x02")
-        for who, ts, change in history:
-            tss = datetime.utcfromtimestamp(ts).isoformat()
-            outs.append(
-                f" {tss}"
-                f" by \x02{who}\x02:"
-                f" {change}"
-            )
+            for who_nick, who_oper, ts, change in history:
+                if who_oper is not None:
+                    who = f"{who_nick} ({who_oper})"
+                else:
+                    who = f"{who_nick}"
+                tss = datetime.utcfromtimestamp(ts).isoformat()
+                outs.append(
+                    f" {tss}"
+                    f" by \x02{who}\x02:"
+                    f" {change}"
+                )
         return outs
 
     async def cmd_addmask(self, oper: Optional[str], nick: str, args: str):
