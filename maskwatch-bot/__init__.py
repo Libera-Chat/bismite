@@ -14,12 +14,12 @@ from ircstates.numerics   import *
 from ircstates            import Hostmask
 from ircrobots.matching   import Response, ANY, Folded, SELF
 from ircchallenge         import Challenge
-from ircrobots.formatting import strip as format_strip
 
-from .common   import Event, MaskType, User, mask_compile, mask_find
-from .common   import to_pretty_time, FLAGS_INCONEQUENTIAL
 from .config   import Config
 from .database import Database
+
+from .common   import Event, MaskType, User, to_pretty_time
+from .common   import mask_compile, mask_find, mask_token
 
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
@@ -137,8 +137,8 @@ class Server(BaseServer):
         else:
             uflags.add("A")
 
-        if event == Event.NICK:
-            uflags.add("N")
+        if event == Event.CONNECT:
+            uflags.add("n")
 
         references = [f"{nick}!{user.user}@{user.host} {user.real}"]
         if user.ip is not None:
@@ -158,8 +158,7 @@ class Server(BaseServer):
 
         matches: List[int] = []
         for mask_id, (pattern, flags) in self._compiled_masks.items():
-            nflags  = flags - uflags
-            nflags -= FLAGS_INCONEQUENTIAL
+            nflags = flags - uflags
             for ref in references:
                 # which flags does the pattern want that we've not got?
                 if not nflags and pattern.search(ref):
@@ -178,14 +177,15 @@ class Server(BaseServer):
                 await self._database.masks.hit(match_id)
 
             # get all (mask, details) for matched IDs
-            matches = [await self._database.masks.get(i) for i in match_ids]
-            types   = {d.type for m, d in matches}
+            matches = [(i, await self._database.masks.get(i)) \
+                for i in match_ids]
+            types   = {d.type for i, (m, d) in matches}
 
             # sort by mask type, descending
             # this should order: exclude, dlethal, lethal, warn
-            matches.sort(key=lambda m: m[1].type, reverse=True)
+            matches.sort(key=lambda m: m[1][1].type, reverse=True)
 
-            mask, d = matches[0]
+            mask_id, (mask, d) = matches[0]
 
             ident  = user.user
             # if the user doesn't have identd, bin the whole host
@@ -223,7 +223,7 @@ class Server(BaseServer):
                 await self.send(build("PRIVMSG", [
                     self._config.channel,
                     (
-                        f"MASK: {d.type.name} mask {match_id} "
+                        f"MASK: {d.type.name} mask {mask_id} "
                         f"{nick}!{user.user}@{user.host} {user.real}"
                     )
                 ]))
@@ -261,9 +261,23 @@ class Server(BaseServer):
             nick = line.params[1]
             if (self._nick_change_whois and
                     self._nick_change_whois[0] == nick):
+
                 self._nick_change_whois.popleft()
-                user = self._users[nick]
-                await self.mask_check(nick, user, Event.NICK)
+
+                # this should be safe.
+                # if the connection using `nick` has changed between sending
+                # whois and getting a response, the whois should be for the
+                # new user of the nick
+
+                # < nick1 NICK nick2
+                # > WHOIS nick2
+                # < nick2 NICK nick3
+                # < nick4 NICK nick2
+                # < [response for new nick2 user]
+
+                if nick in self._users:
+                    user = self._users[nick]
+                    await self.mask_check(nick, user, Event.NICK)
 
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and
@@ -360,7 +374,7 @@ class Server(BaseServer):
             f" [{details.reason or ''}]"
         )
 
-    async def cmd_getmask(self, nick: str, sargs: str):
+    async def cmd_getmask(self, oper: Optional[str], nick: str, sargs: str):
         args = sargs.split(None, 1)
         if not args:
             return ["please provide a mask id"]
@@ -386,73 +400,13 @@ class Server(BaseServer):
         return outs
 
     async def cmd_addmask(self, oper: Optional[str], nick: str, args: str):
-        args = args.lstrip()
-        if args:
-            end = mask_find(args)
-            if end > 0:
-                mask = format_strip(args[:end])
-                try:
-                    cmask, flags = mask_compile(mask)
-                except re.error as e:
-                    return [f"regex error: {str(e)}"]
-                else:
-                    reason = args[end:].strip()
-                    if reason:
-                        mask_id = await self._database.masks.add(
-                            nick, oper, mask, reason
-                        )
-                        self._compiled_masks[mask_id] = (cmask, flags)
-                        return [f"added {mask_id}"]
-                    else:
-                        return ["please provide a reason"]
-            else:
-                return ["unterminated regexen"]
-        else:
-            return ["no args provided"]
-
-    async def cmd_togglemask(self, oper: Optional[str], nick: str, args: str):
-        mask_id_s = args.split(None, 1)[0]
-        if mask_id_s.isdigit():
-            mask_id = int(mask_id_s)
-            if await self._database.masks.has_id(mask_id):
-                enabled   = await self._database.masks.toggle(nick, oper, mask_id)
-                enabled_s = "enabled" if enabled else "disabled"
-
-                if enabled:
-                    mask, _      = await self._database.masks.get(mask_id)
-                    cmask, flags = mask_compile(mask)
-                    self._compiled_masks[mask_id] = (cmask, flags)
-                    self._compiled_masks = OrderedDict(
-                        sorted(self._compiled_masks.items())
-                    )
-                else:
-                    del self._compiled_masks[mask_id]
-
-                if oper is not None:
-                    who = f"{nick} ({oper})"
-                else:
-                    who = f"{nick}"
-                log = f"{who} TOGGLEMASK: {enabled_s} mask \x02#{mask_id}\x02"
-                await self.send(build("PRIVMSG", [self._config.channel, log]))
-                return [f"mask {mask_id} {enabled_s}"]
-            else:
-                return [f"unknown mask id {mask_id}"]
-        elif mask_id:
-            return ["that's not an id/number"]
-        if not args:
-            return ["no args provided"]
-
-        end = mask_find(args)
-        if end < 1:
-            return ["unterminated regexen"]
-
-        mask = format_strip(args[:end])
         try:
+            mask, args   = mask_token(args)
             cmask, flags = mask_compile(mask)
         except re.error as e:
             return [f"regex error: {str(e)}"]
         else:
-            reason = args[end:].strip()
+            reason = args
             if not reason:
                 return ["please provide a reason"]
 
@@ -461,7 +415,7 @@ class Server(BaseServer):
             if not "|" in reason:
                 reason = f"|{reason}"
 
-            mask_id = await self._database.masks.add(nick, mask, reason)
+            mask_id = await self._database.masks.add(nick, oper, mask, reason)
             self._compiled_masks[mask_id] = (cmask, flags)
 
             # check/warn about how many users this will hit
@@ -473,8 +427,7 @@ class Server(BaseServer):
                 samples += 1
                 recent_masks, uflags = self._recent_masks[i]
                 for recent_mask in recent_masks:
-                    nflags  = flags - uflags
-                    nflags -= FLAGS_INCONEQUENTIAL
+                    nflags = flags - uflags
                     if not nflags and cmask.search(recent_mask):
                         matches += 1
                         # only breaks one level of `for`
@@ -485,7 +438,7 @@ class Server(BaseServer):
                 f"(hits {matches} out of last {samples} users)"
             ]
 
-    async def cmd_togglemask(self, nick: str, sargs: str):
+    async def cmd_togglemask(self, oper: Optional[str], nick: str, sargs: str):
         args = sargs.split(None, 1)
         if not args:
             return ["please provide a mask id"]
@@ -496,8 +449,8 @@ class Server(BaseServer):
         if not await self._database.masks.has_id(mask_id):
             return [f"unknown mask id {mask_id}"]
 
-        mask, _   = await self._database.masks.get(mask_id)
-        enabled   = await self._database.masks.toggle(nick, mask_id)
+        mask, d   = await self._database.masks.get(mask_id)
+        enabled   = await self._database.masks.toggle(nick, oper, mask_id)
         enabled_s = "enabled" if enabled else "disabled"
 
         if enabled:
@@ -508,10 +461,18 @@ class Server(BaseServer):
             )
         else:
             del self._compiled_masks[mask_id]
+            
+        if oper is not None:
+            who = f"{nick} ({oper})"
+        else:
+            who = f"{nick}"
 
-        log = f"{nick} TOGGLEMASK: {enabled_s} mask \x02{mask}\x02"
-        await self.send(build("PRIVMSG", [self._config.channel, log]))
-        return [f"mask {mask_id} {enabled_s}"]
+        out = (
+            f"{who} TOGGLEMASK: {enabled_s}"
+            f" {d.type.name} mask \x02{mask}\x02"
+        )
+        await self.send(build("PRIVMSG", [self._config.channel, out]))
+        return [f"{d.type.name} mask {mask_id} {enabled_s}"]
 
     async def cmd_setmask(self, oper: Optional[str], nick: str, sargs: str):
         args = sargs.split()
@@ -544,7 +505,7 @@ class Server(BaseServer):
             outs.append(self._mask_format(mask_id, mask, d))
         return outs or ["no masks"]
 
-    async def cmd_addreason(self, nick: str, args: str):
+    async def cmd_addreason(self, oper: Optional[str], nick: str, args: str):
         args = args.split()
         if len(args) < 2:
             return ["syntax: addreason <alias> <text>"]
@@ -556,7 +517,7 @@ class Server(BaseServer):
         self._reasons[args[0].lower()] = " ".join(args[1:])
         return [f"added \x02${args[0].lower()}\x02"]
 
-    async def cmd_delreason(self, nick: str, args: str):
+    async def cmd_delreason(self, oper: Optional[str], nick: str, args: str):
         args = args.split()
         if len(args) < 1:
             return ["syntax: delreason <alias>"]
@@ -568,12 +529,46 @@ class Server(BaseServer):
         else:
             return [f"the reason \x02${args[0].lower()}\x02 does not exist"]
 
-    async def cmd_listreason(self, nick: str, args: str):
+    async def cmd_listreason(self, oper: Optional[str], nick: str, args: str):
         args = args.split()
         outs: List[str] = []
         for key, value in self._reasons.items():
             outs.append(f"${key}: \x02{value}\x02")
         return outs or ["no reason templates"]
+
+    async def cmd_testmask(self, oper: Optional[str], nick: str, args: str):
+        try:
+            mask, _      = mask_token(args)
+            cmask, flags = mask_compile(mask)
+        except Exception as e:
+            return [f"failed to add mask: {str(e)}"]
+
+        samples = 0
+        matches: List[str] = []
+        for i in range(MAX_RECENT):
+            if i == len(self._recent_masks):
+                break
+            samples += 1
+            recent_masks, uflags = self._recent_masks[i]
+            for recent_mask in recent_masks:
+                nflags = flags - uflags
+                if not nflags and cmask.search(recent_mask):
+                    matches.append(recent_mask)
+                    # only breaks one level of `for`
+                    break
+
+        outs: List[str] = []
+        for match in matches[:10]:
+            outs.append(f" {match}")
+
+        if outs:
+            outs.insert(0, f"mask \x02{mask}\x02 matches...")
+            if len(matches) > 10:
+                outs.append(f" (and {len(matches)-10} more)")
+            outs.append(f"... out of {samples}")
+        else:
+            outs.insert(0, f"mask \x02{mask}\x02 matches 0 out of {samples}")
+        return outs
 
     def line_preread(self, line: Line):
         print(f"< {line.format()}")
