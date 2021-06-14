@@ -9,6 +9,7 @@ from ircrobots import Bot, Server
 from ircstates.numerics import *
 from ircrobots.matching import ANY, Folded, Response, SELF
 
+from .common   import Event
 from .database import Database
 
 SEND_DELAY = 10.0
@@ -41,13 +42,13 @@ async def delayed_check(
         if bot.servers:
             server = list(bot.servers.values())[0]
             while server.to_check:
-                ts, nick, user, event = server.to_check[0]
+                ts, nick, user = server.to_check[0]
                 due = ts+delay
 
                 if due <= now:
                     server.to_check.popleft()
                     if user.connected:
-                        await server.mask_check(nick, user, event)
+                        await server.mask_check(nick, user, Event.CONNECT)
                 else:
                     wait = due-now
                     break

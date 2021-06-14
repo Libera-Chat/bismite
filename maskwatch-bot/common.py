@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 from enum        import Enum, IntEnum
-from typing      import Pattern, Optional, Tuple
+from typing      import Pattern, Optional, Set, Tuple
 
 @dataclass
 class User(object):
@@ -9,6 +9,7 @@ class User(object):
     host: str
     real: str
     ip: Optional[str]
+    account: Optional[str] = None
 
     connected: bool = True
 
@@ -34,17 +35,18 @@ class MaskDetails(object):
     last_hit: Optional[int]
 
 
+FLAGS_INCONEQUENTIAL = set("i")
 def mask_compile(
         pattern: str
-        ) -> Tuple[Pattern, str]:
+        ) -> Tuple[Pattern, Set[str]]:
     p, sflags = pattern.rsplit(pattern[0], 1)
     pattern   = p[1:]
 
-    flags = 0
+    rflags = 0
     if "i" in sflags:
-        flags |= re.I
+        rflags |= re.I
 
-    return re.compile(pattern, flags), sflags
+    return re.compile(pattern, rflags), set(sflags)
 
 def _find_unescaped(s: str, c: str):
     i = 0
@@ -72,3 +74,30 @@ def mask_find(s: str):
                 return end
     else:
         raise ValueError("pattern delim not found")
+
+SECONDS_MINUTES = 60
+SECONDS_HOURS   = SECONDS_MINUTES*60
+SECONDS_DAYS    = SECONDS_HOURS*24
+SECONDS_WEEKS   = SECONDS_DAYS*7
+
+def to_pretty_time(total_seconds: int) -> str:
+    weeks, days      = divmod(total_seconds, SECONDS_WEEKS)
+    days, hours      = divmod(days, SECONDS_DAYS)
+    hours, minutes   = divmod(hours, SECONDS_HOURS)
+    minutes, seconds = divmod(minutes, SECONDS_MINUTES)
+
+    units = list(filter(
+        lambda u: u[0] > 0,
+        [
+            (weeks,   "w"),
+            (days,    "d"),
+            (hours,   "h"),
+            (minutes, "m"),
+            (seconds, "s")
+        ]
+    ))
+    out = ""
+    for i, unit in units[:2]:
+        out += f"{i}{unit}"
+    return out
+
