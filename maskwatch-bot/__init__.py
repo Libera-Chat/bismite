@@ -103,7 +103,6 @@ class Server(BaseServer):
         # return the oper name or nothing
         if whois_line.command == RPL_WHOISOPERATOR:
             match = re.search(r"^is opered as (\S+)(?:,|$)", whois_line.params[2])
-            print(match)
             if match is not None:
                 return match.group(1)
         return None
