@@ -6,7 +6,7 @@ from typing      import Deque, Dict, List, Optional, Tuple
 from typing      import OrderedDict as TOrderedDict
 
 
-from irctokens import build, Line
+from irctokens import build, Line, Hostmask
 from ircrobots import Bot as BaseBot
 from ircrobots import Server as BaseServer
 
@@ -23,6 +23,7 @@ from .common   import mask_compile, mask_find, mask_token
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
 RPL_ENDOFRSACHALLENGE2 = "741"
+RPL_WHOISOPERATOR      = "313"
 RPL_YOUREOPER          = "381"
 
 MAX_RECENT = 1000
@@ -88,18 +89,23 @@ class Server(BaseServer):
         else:
             await self.send(build("OPER", [oper_name, oper_pass]))
 
-    async def _is_oper(self, nickname: str):
+    async def _get_oper(self, nickname: str):
         await self.send(build("WHOIS", [nickname]))
 
         whois_oper = Response(RPL_WHOISOPERATOR, [SELF, Folded(nickname)])
         whois_end  = Response(RPL_ENDOFWHOIS,    [SELF, Folded(nickname)])
-        #:lithium.libera.chat 313 sandcat sandcat :is an IRC Operator
+        #:lithium.libera.chat 320 sandcat sandcat :is opered as sandcat, privset sandcat
         #:lithium.libera.chat 318 sandcat sandcat :End of /WHOIS list.
 
         whois_line = await self.wait_for({
             whois_end, whois_oper
         })
-        return whois_line.command == RPL_WHOISOPERATOR
+        # return the oper name or nothing
+        if whois_line.command == RPL_WHOISOPERATOR:
+            match = re.search(r"^is opered as (\S+)(?:,|$)", whois_line.params[2])
+            if match is not None:
+                return match.group(1)
+        return None
 
     async def _format(self, string: str):
         # expand reason templates
@@ -284,7 +290,7 @@ class Server(BaseServer):
             await self.send(build("PRIVMSG", [self._config.channel, out]))
 
             cmd, _, args = line.params[1].partition(" ")
-            await self.cmd(line.hostmask.nickname, cmd.lower(), args)
+            await self.cmd(line.hostmask, cmd.lower(), args)
 
         else:
 
@@ -329,25 +335,26 @@ class Server(BaseServer):
                 if old_nick in self._users:
                     user = self._users.pop(old_nick)
                     self._users[new_nick] = user
-
                     # refresh what we think this user's account is
                     self._nick_change_whois.append(new_nick)
                     user.account = None
                     await self.send(build("WHOIS", [new_nick]))
 
     async def cmd(self,
-            who:     str,
+            who:     Hostmask,
             command: str,
             args:    str):
 
-        if await self._is_oper(who):
+        opername = await self._get_oper(who.nickname)
+        if opername is not None:
+            opername = None if opername == "<grant>" else opername
             attrib  = f"cmd_{command}"
             if hasattr(self, attrib):
-                outs = await getattr(self, attrib)(who, args)
+                outs = await getattr(self, attrib)(opername, str(who), args)
                 for out in outs:
-                    await self.send(build("NOTICE", [who, out]))
+                    await self.send(build("NOTICE", [who.nickname, out]))
             else:
-                await self.send(build("NOTICE", [who, f"\x02{command.upper()}\x02 is not a valid command"]))
+                await self.send(build("NOTICE", [who.nickname, f"\x02{command.upper()}\x02 is not a valid command"]))
 
     def _mask_format(self,
             mask_id: int,
@@ -368,7 +375,7 @@ class Server(BaseServer):
             f" [{details.reason or ''}]"
         )
 
-    async def cmd_getmask(self, nick: str, sargs: str):
+    async def cmd_getmask(self, oper: Optional[str], nick: str, sargs: str):
         args = sargs.split(None, 1)
         if not args:
             return ["please provide a mask id"]
@@ -384,16 +391,20 @@ class Server(BaseServer):
         outs = [self._mask_format(mask_id, mask, d)]
         if history:
             outs.append("\x02changes:\x02")
-        for who, ts, change in history:
-            tss = datetime.utcfromtimestamp(ts).isoformat()
-            outs.append(
-                f" {tss}"
-                f" by \x02{who}\x02:"
-                f" {change}"
-            )
+            for who_nick, who_oper, ts, change in history:
+                if who_oper is not None:
+                    who = f"{who_nick} ({who_oper})"
+                else:
+                    who = f"{who_nick}"
+                tss = datetime.utcfromtimestamp(ts).isoformat()
+                outs.append(
+                    f" {tss}"
+                    f" by \x02{who}\x02:"
+                    f" {change}"
+                )
         return outs
 
-    async def cmd_addmask(self, nick: str, args: str):
+    async def cmd_addmask(self, oper: Optional[str], nick: str, args: str):
         try:
             mask, args   = mask_token(args)
             cmask, flags = mask_compile(mask)
@@ -409,7 +420,7 @@ class Server(BaseServer):
             if not "|" in reason:
                 reason = f"|{reason}"
 
-            mask_id = await self._database.masks.add(nick, mask, reason)
+            mask_id = await self._database.masks.add(nick, oper, mask, reason)
             self._compiled_masks[mask_id] = (cmask, flags)
 
             # check/warn about how many users this will hit
@@ -432,7 +443,7 @@ class Server(BaseServer):
                 f"(hits {matches} out of last {samples} users)"
             ]
 
-    async def cmd_togglemask(self, nick: str, sargs: str):
+    async def cmd_togglemask(self, oper: Optional[str], nick: str, sargs: str):
         args = sargs.split(None, 1)
         if not args:
             return ["please provide a mask id"]
@@ -444,7 +455,7 @@ class Server(BaseServer):
             return [f"unknown mask id {mask_id}"]
 
         mask, d   = await self._database.masks.get(mask_id)
-        enabled   = await self._database.masks.toggle(nick, mask_id)
+        enabled   = await self._database.masks.toggle(nick, oper, mask_id)
         enabled_s = "enabled" if enabled else "disabled"
 
         if enabled:
@@ -455,15 +466,20 @@ class Server(BaseServer):
             )
         else:
             del self._compiled_masks[mask_id]
+            
+        if oper is not None:
+            who = f"{nick} ({oper})"
+        else:
+            who = f"{nick}"
 
         out = (
-            f"{nick} TOGGLEMASK: {enabled_s}"
+            f"{who} TOGGLEMASK: {enabled_s}"
             f" {d.type.name} mask \x02{mask}\x02"
         )
         await self.send(build("PRIVMSG", [self._config.channel, out]))
         return [f"{d.type.name} mask {mask_id} {enabled_s}"]
 
-    async def cmd_setmask(self, nick: str, sargs: str):
+    async def cmd_setmask(self, oper: Optional[str], nick: str, sargs: str):
         args = sargs.split()
         if len(args) < 2:
             return ["not enough params"]
@@ -471,7 +487,6 @@ class Server(BaseServer):
             return ["that's not an id/number"]
         elif args[1].upper() in MaskType:
             return [f"unknown mask type {args[1].upper()}"]
-
         mask_id   = int(args[0])
         mask_type = MaskType[args[1].upper()]
         if not await self._database.masks.has_id(mask_id):
@@ -479,20 +494,23 @@ class Server(BaseServer):
         mask, d = await self._database.masks.get(mask_id)
         if d.type == mask_type:
             return [f"{mask} is already {mask_type.name}"]
-
-        await self._database.masks.set_type(nick, mask_id, mask_type)
-        log = f"{nick} SETMASK: type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
+        if oper is not None:
+            who = f"{nick} ({oper})"
+        else:
+            who = f"{nick}"
+        await self._database.masks.set_type(nick, oper, mask_id, mask_type)
+        log = f"{who} SETMASK: type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
         await self.send(build("PRIVMSG", [self._config.channel, log]))
         return [f"{mask} changed from {d.type.name} to {mask_type.name}"]
 
-    async def cmd_listmask(self, nick: str, args: str):
+    async def cmd_listmask(self, oper: Optional[str], nick: str, args: str):
         outs: List[str] = []
         for mask_id, _ in self._compiled_masks.items():
             mask, d = await self._database.masks.get(mask_id)
             outs.append(self._mask_format(mask_id, mask, d))
         return outs or ["no masks"]
 
-    async def cmd_addreason(self, nick: str, args: str):
+    async def cmd_addreason(self, oper: Optional[str], nick: str, args: str):
         args = args.split()
         if len(args) < 2:
             return ["syntax: addreason <alias> <text>"]
@@ -504,7 +522,7 @@ class Server(BaseServer):
         self._reasons[args[0].lower()] = " ".join(args[1:])
         return [f"added \x02${args[0].lower()}\x02"]
 
-    async def cmd_delreason(self, nick: str, args: str):
+    async def cmd_delreason(self, oper: Optional[str], nick: str, args: str):
         args = args.split()
         if len(args) < 1:
             return ["syntax: delreason <alias>"]
@@ -516,14 +534,14 @@ class Server(BaseServer):
         else:
             return [f"the reason \x02${args[0].lower()}\x02 does not exist"]
 
-    async def cmd_listreason(self, nick: str, args: str):
+    async def cmd_listreason(self, oper: Optional[str], nick: str, args: str):
         args = args.split()
         outs: List[str] = []
         for key, value in self._reasons.items():
             outs.append(f"${key}: \x02{value}\x02")
         return outs or ["no reason templates"]
 
-    async def cmd_testmask(self, nick: str, args: str):
+    async def cmd_testmask(self, oper: Optional[str], nick: str, args: str):
         try:
             mask, _      = mask_token(args)
             cmask, flags = mask_compile(mask)
