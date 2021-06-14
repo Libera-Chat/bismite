@@ -48,7 +48,17 @@ def mask_compile(
     if "i" in sflags:
         rflags |= re.I
 
-    return re.compile(mask[1:], rflags), set(sflags)
+    flags = set(sflags)
+
+    # flags should be expressed as "only match x" rather than "also match x"
+    # "N" means "also match nick changes" but "n" means "only match connect"
+    # so if we have no "N", we add "n"
+    if not "N" in flags:
+        flags.add("n")
+    else:
+        flags.remove("N")
+
+    return re.compile(mask[1:], rflags), flags
 
 def _find_unescaped(s: str, c: str):
     i = 0
