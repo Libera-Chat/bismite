@@ -438,7 +438,7 @@ class Server(BaseServer):
         if not await self._database.masks.has_id(mask_id):
             return [f"unknown mask id {mask_id}"]
 
-        mask, _   = await self._database.masks.get(mask_id)
+        mask, d   = await self._database.masks.get(mask_id)
         enabled   = await self._database.masks.toggle(nick, mask_id)
         enabled_s = "enabled" if enabled else "disabled"
 
@@ -451,9 +451,12 @@ class Server(BaseServer):
         else:
             del self._compiled_masks[mask_id]
 
-        log = f"{nick} TOGGLEMASK: {enabled_s} mask \x02{mask}\x02"
-        await self.send(build("PRIVMSG", [self._config.channel, log]))
-        return [f"mask {mask_id} {enabled_s}"]
+        out = (
+            f"{nick} TOGGLEMASK: {enabled_s}"
+            f" {d.type.name} mask \x02{mask}\x02"
+        )
+        await self.send(build("PRIVMSG", [self._config.channel, out]))
+        return [f"{d.type.name} mask {mask_id} {enabled_s}"]
 
     async def cmd_setmask(self, nick: str, sargs: str):
         args = sargs.split()
