@@ -373,7 +373,7 @@ class Server(BaseServer):
             f"{str(mask_id).rjust(3)}:"
             f" \x02{mask}\x02"
             f" ({details.hits} hits{last_hit})"
-            f" {details.type.name}"
+            f" \x02{details.type.name}\x02"
             f" [{details.reason or ''}]"
         )
 
