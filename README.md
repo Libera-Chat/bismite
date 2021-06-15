@@ -94,3 +94,16 @@ Same as `LETHAL`, but the k-line is delayed a bit.
 
 Same as `WARN`, but is seen as more "important" than other mask types, and
 will thus prevent people matching it from matching e.g. `LETHAL` masks.
+
+## mask flags
+You can specify different flags to limit when a mask will be matched. For example to add mask flag `i`, use:
+
+```
+addmask /^beep!/i $spam|!dnsbl
+```
+
+The mask flags are as follows:
+* `i` - case insensitive match
+* `a` - only match users *without* an account
+* `A` - only match users *with* an account
+* `N` - also match on nick changes instead of just on connections
