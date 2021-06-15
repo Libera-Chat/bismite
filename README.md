@@ -104,6 +104,6 @@ addmask /^beep!/i $spam|!dnsbl
 
 The mask flags are as follows:
 * `i` - case insensitive match
-* `a` - only match users *without* an account
-* `A` - only match users *with* an account
+* `a` - only match users *with* an account
+* `A` - only match users *without* an account
 * `N` - also match on nick changes instead of just on connections
