@@ -545,10 +545,14 @@ class Server(BaseServer):
 
     async def cmd_testmask(self, oper: Optional[str], nick: str, args: str):
         try:
-            mask, _      = mask_token(args)
+            mask, args   = mask_token(args)
             cmask, flags = mask_compile(mask)
         except Exception as e:
             return [f"failed to add mask: {str(e)}"]
+
+        max = 10
+        if args.strip() == "-all":
+            max = MAX_RECENT
 
         samples = 0
         matches: List[str] = []
@@ -565,13 +569,13 @@ class Server(BaseServer):
                     break
 
         outs: List[str] = []
-        for match in matches[:10]:
+        for match in matches[:max]:
             outs.append(f" {match}")
 
         if outs:
             outs.insert(0, f"mask \x02{mask}\x02 matches...")
-            if len(matches) > 10:
-                outs.append(f" (and {len(matches)-10} more)")
+            if len(matches) > max:
+                outs.append(f" (and {len(matches)-max} more)")
             outs.append(f"... out of {samples}")
         else:
             outs.insert(0, f"mask \x02{mask}\x02 matches 0 out of {samples}")
