@@ -62,10 +62,10 @@ def mask_compile(
     return re.compile(mask[1:], rflags), flags
 
 def _find_unescaped(s: str, c: str):
-    i = 0
+    i = 1
     while i < len(s):
-        i += 1
         c2 = s[i]
+        i += 1
         if c2 == "\\":
             i += 1
         elif c2 == c:
