@@ -412,38 +412,38 @@ class Server(BaseServer):
             cmask, flags = mask_compile(mask)
         except re.error as e:
             return [f"regex error: {str(e)}"]
-        else:
-            reason = args
-            if not reason:
-                return ["please provide a reason"]
 
-            # if there's no explicit oper reason, assume this
-                # is an oper reason. safer than assuming public.
-            if not "|" in reason:
-                reason = f"|{reason}"
+        reason = args
+        if not reason:
+            return ["please provide a reason"]
 
-            mask_id = await self._database.masks.add(nick, oper, mask, reason)
-            self._compiled_masks[mask_id] = (cmask, flags)
+        # if there's no explicit oper reason, assume this
+        # is an oper reason. safer than assuming public.
+        if not "|" in reason:
+            reason = f"|{reason}"
 
-            # check/warn about how many users this will hit
-            matches = 0
-            samples = 0
-            for i in range(MAX_RECENT):
-                if i == len(self._recent_masks):
+        mask_id = await self._database.masks.add(nick, oper, mask, reason)
+        self._compiled_masks[mask_id] = (cmask, flags)
+
+        # check/warn about how many users this will hit
+        matches = 0
+        samples = 0
+        for i in range(MAX_RECENT):
+            if i == len(self._recent_masks):
+                break
+            samples += 1
+            recent_masks, uflags = self._recent_masks[i]
+            for recent_mask in recent_masks:
+                nflags = flags - uflags
+                if not nflags and cmask.search(recent_mask):
+                    matches += 1
+                    # only breaks one level of `for`
                     break
-                samples += 1
-                recent_masks, uflags = self._recent_masks[i]
-                for recent_mask in recent_masks:
-                    nflags = flags - uflags
-                    if not nflags and cmask.search(recent_mask):
-                        matches += 1
-                        # only breaks one level of `for`
-                        break
 
-            return [
-                f"added {mask_id} "
-                f"(hits {matches} out of last {samples} users)"
-            ]
+        return [
+            f"added {mask_id} "
+            f"(hits {matches} out of last {samples} users)"
+        ]
 
     async def cmd_togglemask(self, oper: Optional[str], nick: str, sargs: str):
         args = sargs.split(None, 1)
