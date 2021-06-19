@@ -109,7 +109,7 @@ class Server(BaseServer):
                 return match.group(1)
         return None
 
-    async def _format(self, string: str):
+    def _format(self, string: str):
         # expand reason templates
         for i in range(10):
             changed = False
@@ -201,7 +201,7 @@ class Server(BaseServer):
 
             # split off |oper reason
             reason, sep, oreason = reason.partition("|")
-            reason  = await self._format(reason.rstrip())
+            reason  = self._format(reason.rstrip())
             # reattach |oper reason
             reason += sep + oreason
 
