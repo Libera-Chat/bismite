@@ -468,7 +468,7 @@ class Server(BaseServer):
             )
         else:
             del self._compiled_masks[mask_id]
-            
+
         if oper is not None:
             who = f"{nick} ({oper})"
         else:
@@ -489,10 +489,12 @@ class Server(BaseServer):
             return ["that's not an id/number"]
         elif args[1].upper() in MaskType:
             return [f"unknown mask type {args[1].upper()}"]
+
         mask_id   = int(args[0])
         mask_type = MaskType[args[1].upper()]
         if not await self._database.masks.has_id(mask_id):
             return [f"unknown mask id {mask_id}"]
+
         mask, d = await self._database.masks.get(mask_id)
         if d.type == mask_type:
             return [f"{mask} is already {mask_type.name}"]
@@ -501,8 +503,10 @@ class Server(BaseServer):
         else:
             who = f"{nick}"
         await self._database.masks.set_type(nick, oper, mask_id, mask_type)
+
         log = f"{who} SETMASK: type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
         await self.send(build("PRIVMSG", [self._config.channel, log]))
+
         return [f"{mask} changed from {d.type.name} to {mask_type.name}"]
 
     async def cmd_listmask(self, oper: Optional[str], nick: str, args: str):
