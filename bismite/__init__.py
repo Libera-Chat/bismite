@@ -487,7 +487,7 @@ class Server(BaseServer):
             return ["not enough params"]
         elif not args[0].isdigit():
             return ["that's not an id/number"]
-        elif args[1].upper() in MaskType:
+        elif not args[1].upper() in {m.name for m in MaskType}:
             return [f"unknown mask type {args[1].upper()}"]
 
         mask_id   = int(args[0])
