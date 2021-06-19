@@ -410,8 +410,13 @@ class Server(BaseServer):
         try:
             mask, args   = mask_token(args)
             cmask, flags = mask_compile(mask)
+        except ValueError as e:
+            return [
+                f"syntax error: {str(e)}",
+                f"usage: ADDMASK /<pattern>/ <public reason>[|<oper reason>]"
+            ]
         except re.error as e:
-            return [f"regex error: {str(e)}"]
+            return [f"regex compilation error: {str(e)}"]
 
         reason = args
         if not reason:
@@ -551,8 +556,13 @@ class Server(BaseServer):
         try:
             mask, args   = mask_token(args)
             cmask, flags = mask_compile(mask)
-        except Exception as e:
-            return [f"failed to add mask: {str(e)}"]
+        except ValueError as e:
+            return [
+                f"syntax error: {str(e)}",
+                f"usage: TESTMASK /<pattern>/"
+            ]
+        except re.error as e:
+            return [f"regex compilation error: {str(e)}"]
 
         max = 10
         if args.strip() == "-all":

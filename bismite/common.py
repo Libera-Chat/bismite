@@ -86,7 +86,7 @@ def mask_find(s: str):
             else:
                 return end
     else:
-        raise ValueError("pattern delim not found")
+        raise ValueError("no pattern delimiter found")
 
 def mask_token(
         input: str
