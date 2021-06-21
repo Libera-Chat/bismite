@@ -2,7 +2,7 @@ import asyncio, re, traceback
 from collections import deque, OrderedDict
 from datetime    import datetime
 from time        import monotonic, time
-from typing      import Deque, Dict, List, Optional, Tuple
+from typing      import Any, Deque, Dict, List, Optional, Tuple
 from typing      import OrderedDict as TOrderedDict
 
 
@@ -29,6 +29,16 @@ RPL_YOUREOPER          = "381"
 MAX_RECENT = 1000
 
 RE_OPERNAME = re.compile(r"^is opered as (\S+)(?:,|$)")
+
+# decorator, for command usage strings
+def usage(usage_string: str):
+    def usage_inner(object: Any):
+        object._usage = usage_string
+        return object
+    return usage_inner
+
+class UsageError(Exception):
+    pass
 
 class Server(BaseServer):
     def __init__(self,
@@ -352,7 +362,12 @@ class Server(BaseServer):
             opername = None if opername == "<grant>" else opername
             attrib  = f"cmd_{command}"
             if hasattr(self, attrib):
-                outs = await getattr(self, attrib)(opername, str(who), args)
+                func = getattr(self, attrib)
+                try:
+                    outs = await getattr(self, attrib)(opername, str(who), args)
+                except UsageError as e:
+                    outs = [str(e), f"usage: {command.upper()} {func._usage}"]
+
                 for out in outs:
                     await self.send(build("NOTICE", [who.nickname, out]))
             else:
@@ -377,12 +392,13 @@ class Server(BaseServer):
             f" [{details.reason or ''}]"
         )
 
+    @usage("<mask-id>")
     async def cmd_getmask(self, oper: Optional[str], nick: str, sargs: str):
         args = sargs.split(None, 1)
         if not args:
-            return ["please provide a mask id"]
+            raise UsageError("please provide a mask id")
         elif not args[0].isdigit():
-            return ["that's not an id/number"]
+            raise UsageError("that's not an id/number")
 
         mask_id = int(args[0])
         if not await self._database.masks.has_id(mask_id):
@@ -406,22 +422,19 @@ class Server(BaseServer):
                 )
         return outs
 
+    @usage("/<pattern>/ <public reason>[|<oper reason>]")
     async def cmd_addmask(self, oper: Optional[str], nick: str, args: str):
         try:
             mask, args   = mask_token(args)
+            if not args:
+                raise UsageError("please provide a mask reason")
             cmask, flags = mask_compile(mask)
         except ValueError as e:
-            return [
-                f"syntax error: {str(e)}",
-                f"usage: ADDMASK /<pattern>/ <public reason>[|<oper reason>]"
-            ]
+            raise UsageError(f"syntax error: {str(e)}")
         except re.error as e:
             return [f"regex compilation error: {str(e)}"]
 
         reason = args
-        if not reason:
-            return ["please provide a reason"]
-
         # if there's no explicit oper reason, assume this
         # is an oper reason. safer than assuming public.
         if not "|" in reason:
@@ -450,12 +463,13 @@ class Server(BaseServer):
             f"(hits {matches} out of last {samples} users)"
         ]
 
+    @usage("<mask-id>")
     async def cmd_togglemask(self, oper: Optional[str], nick: str, sargs: str):
         args = sargs.split(None, 1)
         if not args:
-            return ["please provide a mask id"]
+            raise UsageError("please provide a mask id")
         elif not args[0].isdigit():
-            return ["that's not an id/number"]
+            raise UsageError("that's not an id/number")
 
         mask_id = int(args[0])
         if not await self._database.masks.has_id(mask_id):
@@ -486,14 +500,16 @@ class Server(BaseServer):
         await self.send(build("PRIVMSG", [self._config.channel, out]))
         return [f"{d.type.name} mask {mask_id} {enabled_s}"]
 
+    @usage("<id> <type>")
     async def cmd_setmask(self, oper: Optional[str], nick: str, sargs: str):
-        args = sargs.split()
+        args   = sargs.split()
+        mtypes = {m.name for m in MaskType}
         if len(args) < 2:
-            return ["not enough params"]
+            raise UsageError("not enough params")
         elif not args[0].isdigit():
-            return ["that's not an id/number"]
-        elif not args[1].upper() in {m.name for m in MaskType}:
-            return [f"unknown mask type {args[1].upper()}"]
+            raise UsageError("that's not an id/number")
+        elif not args[1].upper() in mtypes:
+            return [f"mask type must be one of {mtypes!r}"]
 
         mask_id   = int(args[0])
         mask_type = MaskType[args[1].upper()]
@@ -521,46 +537,48 @@ class Server(BaseServer):
             outs.append(self._mask_format(mask_id, mask, d))
         return outs or ["no masks"]
 
+    @usage("<alias> <text ...>")
     async def cmd_addreason(self, oper: Optional[str], nick: str, args: str):
-        args = args.split()
+        args = args.split(None, 1)
         if len(args) < 2:
-            return ["syntax: addreason <alias> <text>"]
+            raise UsageError("not enough params")
 
-        if await self._database.reasons.has_key(args[0].lower()):
-            return [f"the reason \x02${args[0].lower()}\x02 already exists"]
+        alias = args[0].lower()
+        if await self._database.reasons.has_key(alias):
+            return [f"reason alias \x02${alias}\x02 already exists"]
 
-        await self._database.reasons.add(args[0].lower(), " ".join(args[1:]))
-        self._reasons[args[0].lower()] = " ".join(args[1:])
-        return [f"added \x02${args[0].lower()}\x02"]
+        await self._database.reasons.add(alias, args[1])
+        self._reasons[alias] = args[1]
+        return [f"added reason alias \x02${alias}\x02"]
 
+    @usage("<alias>")
     async def cmd_delreason(self, oper: Optional[str], nick: str, args: str):
-        args = args.split()
+        args = args.split(1)
         if len(args) < 1:
-            return ["syntax: delreason <alias>"]
+            raise UsageError("not enough params")
 
-        if await self._database.reasons.has_key(args[0].lower()):
-            await self._database.reasons.delete(args[0].lower())
-            del self._reasons[args[0].lower()]
-            return [f"deleted \x02${args[0].lower()}\x02"]
+        alias = args[0].lower()
+        if await self._database.reasons.has_key(alias):
+            await self._database.reasons.delete(alias)
+            del self._reasons[alias]
+            return [f"deleted reason alias \x02${alias}\x02"]
         else:
-            return [f"the reason \x02${args[0].lower()}\x02 does not exist"]
+            return [f"the reason alias \x02${alias}\x02 does not exist"]
 
     async def cmd_listreason(self, oper: Optional[str], nick: str, args: str):
         args = args.split()
         outs: List[str] = []
         for key, value in self._reasons.items():
-            outs.append(f"${key}: \x02{value}\x02")
-        return outs or ["no reason templates"]
+            outs.append(f"\x02${key}\x02: {value}")
+        return outs or ["no reason aliases"]
 
+    @usage("/<pattern>/")
     async def cmd_testmask(self, oper: Optional[str], nick: str, args: str):
         try:
             mask, args   = mask_token(args)
             cmask, flags = mask_compile(mask)
         except ValueError as e:
-            return [
-                f"syntax error: {str(e)}",
-                f"usage: TESTMASK /<pattern>/"
-            ]
+            raise UsageError(f"syntax error: {str(e)}")
         except re.error as e:
             return [f"regex compilation error: {str(e)}"]
 
