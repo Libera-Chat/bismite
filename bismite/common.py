@@ -5,6 +5,8 @@ from typing      import Pattern, Optional, Set, Tuple
 
 from ircrobots.formatting import strip as format_strip
 
+VALID_FLAGS = {"A", "N", "S", "Z", "a", "i", "s", "z"}
+
 @dataclass
 class User(object):
     user: str
@@ -126,3 +128,17 @@ def to_pretty_time(total_seconds: int) -> str:
         out += f"{i}{unit}"
     return out
 
+def parse_flags(flags: Set, input: str):
+    flags = set(flags)
+    op    = input[0]
+    for c in input[1:]:
+        if c in "+-":
+            op = c
+        elif c in VALID_FLAGS:
+            if op == "+" and not c in flags:
+                flags.add(c)
+            elif op == "-" and c in flags:
+                flags.remove(c)
+        else:
+            raise ValueError(f"{c} is not a valid flag")
+    return flags

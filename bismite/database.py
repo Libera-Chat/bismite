@@ -134,6 +134,41 @@ class Masks(Table):
             """, [mask_id, by_nick, by_oper, int(time()), f'type {mask_type.name}'])
             await db.commit()
 
+    async def set_reason(self,
+            by_nick:   str,
+            by_oper:   Optional[str],
+            mask_id:   int,
+            reason:    str):
+        async with aiosqlite.connect(self._db_location) as db:
+            await db.execute("""
+                UPDATE masks
+                SET reason=?
+                WHERE id=?
+            """, [reason, mask_id])
+            await db.execute("""
+                INSERT INTO changes (mask_id, by_nick, by_oper, time, change)
+                VALUES (?, ?, ?, ?, ?)
+            """, [mask_id, by_nick, by_oper, int(time()), f'reason {reason}'])
+            await db.commit()
+
+    async def set_mask(self,
+            by_nick:   str,
+            by_oper:   Optional[str],
+            mask_id:   int,
+            mask:      str):
+        # so far this is only for changing flags
+        async with aiosqlite.connect(self._db_location) as db:
+            await db.execute("""
+                UPDATE masks
+                SET mask=?
+                WHERE id=?
+            """, [mask, mask_id])
+            await db.execute("""
+                INSERT INTO changes (mask_id, by_nick, by_oper, time, change)
+                VALUES (?, ?, ?, ?, ?)
+            """, [mask_id, by_nick, by_oper, int(time()), f'mask \x02{mask}\x02'])
+            await db.commit()
+
     async def hit(self, mask_id: int):
         async with aiosqlite.connect(self._db_location) as db:
             cursor = await db.execute("""
