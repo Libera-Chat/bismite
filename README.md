@@ -107,3 +107,5 @@ The mask flags are as follows:
 * `a` - only match users *with* an account
 * `A` - only match users *without* an account
 * `N` - also match on nick changes instead of just on connections
+* `z` - only match users who *are* using TLS
+* `Z` - only match users who *are not* using TLS
