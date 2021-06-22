@@ -529,15 +529,6 @@ class Server(BaseServer):
             await self._database.masks.set_reason(nick, oper, mask_id, reason)
             log    = f"reason \x02{mask}\x02 {reason}"
             result = [f"reason for \x02{mask}\x02 set to \x02{reason}\x02"]
-        elif args[1].lower() == "flags":
-            # this is terrible but is also the only possible way currently
-            pattern, flags = mask.rsplit(mask[0], 1)
-            newflags = "".join(sorted(parse_flags(flags, args[2])))
-            newmask  = f"{pattern}{mask[0]}{newflags}"
-            await self._database.masks.set_mask(nick, oper, mask_id, newmask)
-            self._compiled_masks[mask_id] = mask_compile(newmask)
-            log      = f"flags \x02{newmask}\x02"
-            result   = [f"mask flags for {pattern}{mask[0]} set to +{newflags}"]
         else:
             raise UsageError(f"\x02{args[1].upper()}\x02 is not a valid mask setting")
 
