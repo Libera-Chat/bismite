@@ -150,6 +150,11 @@ class Server(BaseServer):
         else:
             uflags.add("A")
 
+        if user.secure:
+            uflags.add("z")
+        else:
+            uflags.add("Z")
+
         if event == Event.CONNECT:
             uflags.add("n")
 
@@ -269,6 +274,12 @@ class Server(BaseServer):
 
             if nick in self._users:
                 self._users[nick].account = account
+
+        elif line.command == RPL_WHOISSECURE:
+            nick = line.params[1]
+
+            if nick in self._users:
+                self._users[nick].secure = True
 
         elif line.command == RPL_ENDOFWHOIS:
             nick = line.params[1]

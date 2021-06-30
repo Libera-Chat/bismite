@@ -12,6 +12,7 @@ class User(object):
     real: str
     ip: Optional[str]
     account: Optional[str] = None
+    secure: bool = False
 
     connected: bool = True
 
