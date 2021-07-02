@@ -18,7 +18,7 @@ from .config   import Config
 from .database import Database
 
 from .common   import Event, MaskType, User, to_pretty_time
-from .common   import mask_compile, mask_find, mask_token
+from .common   import mask_compile, mask_find, mask_token, mask_weight
 
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
