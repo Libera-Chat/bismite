@@ -61,6 +61,10 @@ def mask_compile(
     mask = mask[1:]
     if delimiter in {"\"", "'"}:
         mask = re.escape(mask)
+        if "^" in flags:
+            mask = f"^{mask}"
+        if "$" in flags:
+            mask = f"{mask}$"
 
     return re.compile(mask, rflags), flags
 
