@@ -40,7 +40,8 @@ def mask_compile(
         mask:  str
         ) -> Tuple[Pattern, Set[str]]:
 
-    mask, sflags = mask.rsplit(mask[0], 1)
+    delimiter    = mask[0]
+    mask, sflags = mask.rsplit(delimiter, 1)
 
     rflags = 0
     if "i" in sflags:
@@ -57,7 +58,11 @@ def mask_compile(
     else:
         flags.remove("N")
 
-    return re.compile(mask[1:], rflags), flags
+    mask = mask[1:]
+    if delimiter in {"\"", "'"}:
+        mask = re.escape(mask)
+
+    return re.compile(mask, rflags), flags
 
 def _find_unescaped(s: str, c: str):
     i = 1
