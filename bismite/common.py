@@ -40,8 +40,12 @@ def mask_compile(
         mask:  str
         ) -> Tuple[Pattern, Set[str]]:
 
-    delimiter    = mask[0]
-    mask, sflags = mask.rsplit(delimiter, 1)
+    delim, mask  = mask[0], mask[1:]
+    mask, sflags = mask.rsplit(delim, 1)
+
+    if not mask:
+        # empty string
+        raise ValueError("empty mask provided")
 
     rflags = 0
     if "i" in sflags:
@@ -59,7 +63,7 @@ def mask_compile(
         flags.remove("N")
 
     mask = mask[1:]
-    if delimiter in {"\"", "'"}:
+    if delim in {"\"", "'"}:
         mask = re.escape(mask)
 
     return re.compile(mask, rflags), flags
