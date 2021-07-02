@@ -212,7 +212,7 @@ class Server(BaseServer):
             types   = {d.type for i, (m, d) in matches}
 
             # sort by mask type, descending
-            # this should order: exclude, dlethal, lethal, warn
+            # this should order: exclude, dlethal, lethal, kill, warn
             matches.sort(
                 key=lambda m: mask_weight(m[1][1].type),
                 reverse=True
@@ -241,6 +241,9 @@ class Server(BaseServer):
                 await self.send_raw(ban)
             elif d.type == MaskType.DLETHAL:
                 self.delayed_send.append((monotonic(), ban))
+            elif d.type == MaskType.KILL:
+                public_reason, *_ = reason.split("|", 1)
+                await self.send(build("KILL", [nick, public_reason]))
 
             if (d.type == MaskType.EXCLUDE and
                     len(types) == 1):

@@ -17,14 +17,16 @@ class User(object):
     connected: bool = True
 
 class MaskType(IntEnum):
-    WARN    = 0b0001
-    LETHAL  = 0b0010
-    EXCLUDE = 0b0100
-    DELAYED = 0b1000
-    DLETHAL = 0b1010
+    WARN    = 0b00001
+    LETHAL  = 0b00010
+    EXCLUDE = 0b00100
+    DELAYED = 0b01000
+    DLETHAL = 0b01010
+    KILL    = 0b10000
 
 MASK_SORT = [
     MaskType.WARN,
+    MaskType.KILL,
     MaskType.LETHAL,
     MaskType.DLETHAL,
     MaskType.EXCLUDE
