@@ -17,10 +17,19 @@ class User(object):
     connected: bool = True
 
 class MaskType(IntEnum):
-    WARN    = 1
-    LETHAL  = 2
-    DLETHAL = 3
-    EXCLUDE = 4
+    WARN    = 0b0001
+    LETHAL  = 0b0010
+    EXCLUDE = 0b0100
+    DLETHAL = 0b1000
+
+MASK_SORT = [
+    MaskType.WARN,
+    MaskType.LETHAL,
+    MaskType.DLETHAL,
+    MaskType.EXCLUDE
+]
+def mask_weight(mtype: MaskType) -> int:
+    return MASK_SORT.index(mtype)
 
 class Event(Enum):
     CONNECT = 1
