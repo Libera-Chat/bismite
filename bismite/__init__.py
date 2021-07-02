@@ -119,11 +119,18 @@ class Server(BaseServer):
                 return match.group(1)
         return None
 
-    def _format(self, string: str):
+    def _format(self,
+            string: str,
+            extras: Dict[str, str]
+            ):
+
+        formats = self._reasons.copy()
+        formats.update(extras)
+
         # expand reason templates
         for i in range(10):
             changed = False
-            for k, v in self._reasons.items():
+            for k, v in formats.items():
                 k = f"${k}"
                 if k in string:
                     changed = True
@@ -210,15 +217,10 @@ class Server(BaseServer):
             if ident.startswith("~"):
                 ident = "*"
 
-            reason = d.reason.lstrip()
-            # if the user-facing bit is `$thing`, see if `thing` is a known
-            # reason alias
-
-            # split off |oper reason
-            reason, sep, oreason = reason.partition("|")
-            reason  = self._format(reason.rstrip())
-            # reattach |oper reason
-            reason += sep + oreason
+            # format reason $aliases
+            reason = self._format(d.reason, {
+                "mask_id": str(mask_id)
+            })
 
             info = {
                 "ident": ident,
