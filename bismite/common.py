@@ -68,7 +68,7 @@ def mask_compile(
 
     delim        = mask[0]
     mask_end     = _find_unescaped(mask, delim)
-    mask, sflags = mask[:mask_end], mask[mask_end:]
+    mask, sflags = mask[1:mask_end-1], mask[mask_end:]
 
     if not mask:
         # empty string
