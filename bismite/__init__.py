@@ -33,7 +33,10 @@ RE_OPERNAME = re.compile(r"^is opered as (\S+)(?:,|$)")
 # decorator, for command usage strings
 def usage(usage_string: str):
     def usage_inner(object: Any):
-        object._usage = usage_string
+        if not hasattr(object, "_usage"):
+            object._usage: List[str] = []
+        # decorators eval bottom up, insert to re-invert order
+        object._usage.insert(0, usage_string)
         return object
     return usage_inner
 
@@ -376,10 +379,13 @@ class Server(BaseServer):
             attrib  = f"cmd_{command}"
             if hasattr(self, attrib):
                 func = getattr(self, attrib)
+                outs: List[str] = []
                 try:
-                    outs = await getattr(self, attrib)(opername, str(who), args)
+                    outs.append(await func(opername, str(who), args))
                 except UsageError as e:
-                    outs = [str(e), f"usage: {command.upper()} {func._usage}"]
+                    outs.append(str(e))
+                    for usage in func._usage:
+                        outs.append(f"usage: {command.upper()} {usage}")
 
                 for out in outs:
                     await self.send(build("NOTICE", [who.nickname, out]))
@@ -435,7 +441,8 @@ class Server(BaseServer):
                 )
         return outs
 
-    @usage("/<pattern>/ <public reason>[|<oper reason>]")
+    @usage("/<regex>/ <public reason>[|<oper reason>]")
+    @usage('"<string>" <public reason>[|<oper reason>]')
     async def cmd_addmask(self, oper: Optional[str], nick: str, args: str):
         try:
             mask, args   = mask_token(args)
