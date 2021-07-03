@@ -381,7 +381,7 @@ class Server(BaseServer):
                 func = getattr(self, attrib)
                 outs: List[str] = []
                 try:
-                    outs.append(await func(opername, str(who), args))
+                    outs.extend(await func(opername, str(who), args))
                 except UsageError as e:
                     outs.append(str(e))
                     for usage in func._usage:
