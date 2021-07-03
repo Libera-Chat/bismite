@@ -191,6 +191,8 @@ class Server(BaseServer):
                 # which flags does the pattern want that we've not got?
                 if not nflags and pattern.search(ref):
                     matches.append(mask_id)
+                    # skip to the next mask
+                    break
         return matches
 
     async def mask_check(self,
