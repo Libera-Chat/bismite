@@ -64,6 +64,10 @@ def mask_compile(
 
     if delim in {"\"", "'"}:
         mask = re.escape(mask)
+        if "^" in flags:
+            mask = f"^{mask}"
+        if "$" in flags:
+            mask = f"{mask}$"
 
     return re.compile(mask, rflags), flags
 
