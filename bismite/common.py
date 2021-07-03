@@ -94,14 +94,14 @@ def mask_compile(
         # string literal
         mask = _unescape(mask, delim)
         mask = re.escape(mask)
+        if "$" in flags:
+            mask = f"{mask}$"
+        if "^" in flags:
+            mask = f"^{mask}"
     elif delim == "@": # what's a better char?
         # glob
         mask = glob_translate(mask)
-
-    if "^" in flags:
-        mask = f"^{mask}"
-    if "$" in flags:
-        mask = f"{mask}$"
+        mask = fr"\A{mask}"
 
     return re.compile(mask, rflags), flags
 
