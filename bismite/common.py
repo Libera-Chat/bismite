@@ -49,13 +49,26 @@ def _unescape(input: str, char: str):
             i   += 1
     return out
 
+def _find_unescaped(s: str, c: str):
+    i = 1
+    while i < len(s):
+        c2 = s[i]
+        i += 1
+        if c2 == "\\":
+            i += 1
+        elif c2 == c:
+            return i
+    else:
+        return -1
+
 FLAGS_INCONSEQUENTIAL = set("i")
 def mask_compile(
         mask:  str
         ) -> Tuple[Pattern, Set[str]]:
 
-    delim, mask  = mask[0], mask[1:]
-    mask, sflags = mask.rsplit(delim, 1)
+    delim        = mask[0]
+    mask_end     = _find_unescaped(mask, delim)
+    mask, sflags = mask[:mask_end], mask[mask_end:]
 
     if not mask:
         # empty string
@@ -85,18 +98,6 @@ def mask_compile(
             mask = f"{mask}$"
 
     return re.compile(mask, rflags), flags
-
-def _find_unescaped(s: str, c: str):
-    i = 1
-    while i < len(s):
-        c2 = s[i]
-        i += 1
-        if c2 == "\\":
-            i += 1
-        elif c2 == c:
-            return i
-    else:
-        return -1
 
 def mask_find(s: str):
     start = s[0]
