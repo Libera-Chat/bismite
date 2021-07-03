@@ -34,6 +34,20 @@ class MaskDetails(object):
     hits:     int
     last_hit: Optional[int]
 
+def _unescape(input: str, char: str):
+    i   = 0
+    out = ""
+
+    while i < len(input):
+        input_char = input[i]
+        if (input_char == "\\"
+                and input[i+1] == char):
+            out += char
+            i   += 2
+        else:
+            out += input_char
+            i   += 1
+    return out
 
 FLAGS_INCONSEQUENTIAL = set("i")
 def mask_compile(
@@ -63,6 +77,7 @@ def mask_compile(
         flags.remove("N")
 
     if delim in {"\"", "'"}:
+        mask = _unescape(mask, delim)
         mask = re.escape(mask)
         if "^" in flags:
             mask = f"^{mask}"
