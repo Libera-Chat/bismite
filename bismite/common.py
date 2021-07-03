@@ -62,7 +62,6 @@ def mask_compile(
     else:
         flags.remove("N")
 
-    mask = mask[1:]
     if delim in {"\"", "'"}:
         mask = re.escape(mask)
 
