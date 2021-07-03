@@ -443,6 +443,7 @@ class Server(BaseServer):
 
     @usage("/<regex>/ <public reason>[|<oper reason>]")
     @usage('"<string>" <public reason>[|<oper reason>]')
+    @usage('@<glob>@ <public reason>[|<oper reason>]')
     async def cmd_addmask(self, oper: Optional[str], nick: str, args: str):
         try:
             mask, args   = mask_token(args)
