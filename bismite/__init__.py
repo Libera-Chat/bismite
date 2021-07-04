@@ -18,7 +18,7 @@ from .config   import Config
 from .database import Database
 
 from .common   import Event, MaskType, User, to_pretty_time
-from .common   import mask_compile, mask_find, mask_token
+from .common   import mask_compile, mask_find, mask_token, parse_flags
 
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
@@ -522,35 +522,48 @@ class Server(BaseServer):
         await self.send(build("PRIVMSG", [self._config.channel, out]))
         return [f"{d.type.name} mask {mask_id} {enabled_s}"]
 
-    @usage("<id> <type>")
+    @usage("<id> <type|reason|flags> <value>")
     async def cmd_setmask(self, oper: Optional[str], nick: str, sargs: str):
-        args   = sargs.split()
-        mtypes = {m.name for m in MaskType}
-        if len(args) < 2:
+        args     = sargs.split()
+        log      = None
+        response = None
+        mtypes   = {m.name for m in MaskType}
+        if len(args) < 3:
             raise UsageError("not enough params")
         elif not args[0].isdigit():
             raise UsageError("that's not an id/number")
-        elif not args[1].upper() in mtypes:
-            return [f"mask type must be one of {mtypes!r}"]
-
         mask_id   = int(args[0])
-        mask_type = MaskType[args[1].upper()]
+        mask, d = await self._database.masks.get(mask_id)
         if not await self._database.masks.has_id(mask_id):
             return [f"unknown mask id {mask_id}"]
 
-        mask, d = await self._database.masks.get(mask_id)
-        if d.type == mask_type:
-            return [f"{mask} is already {mask_type.name}"]
-        if oper is not None:
-            who = f"{nick} ({oper})"
+        if args[1].lower() == "type":
+            if not args[2].upper() in mtypes:
+                return [f"mask type must be one of {mtypes!r}"]
+            mask_type = MaskType[args[2].upper()]
+            if d.type == mask_type:
+                return [f"{mask} is already {mask_type.name}"]
+            await self._database.masks.set_type(nick, oper, mask_id, mask_type)
+            log    = f"type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
+            result = [f"{mask} changed from {d.type.name} to {mask_type.name}"]
+        elif args[1].lower() == "reason":
+            reason = args[2]
+            await self._database.masks.set_reason(nick, oper, mask_id, reason)
+            log    = f"reason \x02{mask}\x02 {reason}"
+            result = [f"reason for \x02{mask}\x02 set to \x02{reason}\x02"]
         else:
-            who = f"{nick}"
-        await self._database.masks.set_type(nick, oper, mask_id, mask_type)
+            raise UsageError(f"\x02{args[1].upper()}\x02 is not a valid mask setting")
 
-        log = f"{who} SETMASK: type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
-        await self.send(build("PRIVMSG", [self._config.channel, log]))
+        if log is not None:
+            if oper is not None:
+                who = f"{nick} ({oper})"
+            else:
+                who = f"{nick}"
+            out = f"{who} SETMASK: {log}"
+            await self.send(build("PRIVMSG", [self._config.channel, out]))
 
-        return [f"{mask} changed from {d.type.name} to {mask_type.name}"]
+        if result is not None:
+            return result
 
     async def cmd_listmask(self, oper: Optional[str], nick: str, args: str):
         outs: List[str] = []

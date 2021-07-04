@@ -154,4 +154,3 @@ def to_pretty_time(total_seconds: int) -> str:
     for i, unit in units[:2]:
         out += f"{i}{unit}"
     return out
-
