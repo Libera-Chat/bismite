@@ -61,7 +61,7 @@ def _find_unescaped(s: str, c: str):
     else:
         return -1
 
-FLAGS_INCONSEQUENTIAL = set("i")
+FLAGS_INCONSEQUENTIAL = set("^$i")
 def mask_compile(
         mask:  str
         ) -> Tuple[Pattern, Set[str]]:
