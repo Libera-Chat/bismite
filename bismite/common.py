@@ -20,7 +20,8 @@ class MaskType(IntEnum):
     WARN    = 0b0001
     LETHAL  = 0b0010
     EXCLUDE = 0b0100
-    DLETHAL = 0b1000
+    DELAYED = 0b1000
+    DLETHAL = 0b1010
 
 MASK_SORT = [
     MaskType.WARN,
