@@ -186,10 +186,13 @@ class Server(BaseServer):
 
         matches: List[int] = []
         for mask_id, (pattern, flags) in self._compiled_masks.items():
+            # which flags does the pattern want that we've not got?
             nflags = flags - uflags
+            if nflags:
+                continue
+
             for ref in references:
-                # which flags does the pattern want that we've not got?
-                if not nflags and pattern.search(ref):
+                if pattern.search(ref):
                     matches.append(mask_id)
                     # skip to the next mask
                     break
