@@ -18,7 +18,7 @@ from .config   import Config
 from .database import Database
 
 from .common   import Event, MaskType, User, to_pretty_time
-from .common   import mask_compile, mask_find, mask_token
+from .common   import mask_compile, mask_find, mask_token, mask_weight
 
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
@@ -213,7 +213,10 @@ class Server(BaseServer):
 
             # sort by mask type, descending
             # this should order: exclude, dlethal, lethal, warn
-            matches.sort(key=lambda m: m[1][1].type, reverse=True)
+            matches.sort(
+                key=lambda m: mask_weight(m[1][1].type),
+                reverse=True
+            )
 
             mask_id, (mask, d) = matches[0]
 
