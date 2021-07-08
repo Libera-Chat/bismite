@@ -82,6 +82,10 @@ adds a reason template that can be used in mask reasons (see above example)
 Prints a line to channel configured in `config.yaml` to tell you that someone
 matched the pattern.
 
+### KILL
+
+Same as `WARN`, but also issues a `/kill` for the user.
+
 ### LETHAL
 
 Same as `WARN`, but also k-lines the user.
