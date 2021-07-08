@@ -246,8 +246,7 @@ class Server(BaseServer):
             elif d.type == MaskType.DLETHAL:
                 self.delayed_send.append((monotonic(), ban))
             elif d.type == MaskType.KILL:
-                public_reason, *_ = reason.split("|", 1)
-                await self.send(build("KILL", [nick, public_reason]))
+                await self.send(build("KILL", [nick, user_reason]))
 
             if (d.type == MaskType.EXCLUDE and
                     len(types) == 1):
