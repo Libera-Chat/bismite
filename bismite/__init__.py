@@ -230,10 +230,14 @@ class Server(BaseServer):
                 "mask_id": str(mask_id)
             })
 
+            user_reason, _, oper_reason = reason.partition("|")
+
             info = {
-                "ident": ident,
-                "user": user,
-                "reason": reason
+                "ident":  ident,
+                "user":   user,
+                "reason": reason,
+                "user_reason": user_reason,
+                "oper_reason": oper_reason
             }
 
             ban = self._config.bancmd.format(**info)
