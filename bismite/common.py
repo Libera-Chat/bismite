@@ -24,15 +24,17 @@ class MaskType(IntEnum):
     DLETHAL = 0b01010
     KILL    = 0b10000
 
-MASK_SORT = [
-    MaskType.WARN,
-    MaskType.KILL,
-    MaskType.LETHAL,
-    MaskType.DLETHAL,
-    MaskType.EXCLUDE
-]
 def mask_weight(mtype: MaskType) -> int:
-    return MASK_SORT.index(mtype)
+    if   mtype & MaskType.WARN:
+        return 0
+    elif mtype & MaskType.KILL:
+        return 1
+    elif mtype & MaskType.LETHAL:
+        return 2
+    elif mtype & MaskType.EXCLUDE:
+        return 3
+    else:
+        return -1
 
 class Event(Enum):
     CONNECT = 1

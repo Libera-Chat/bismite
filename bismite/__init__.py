@@ -243,15 +243,20 @@ class Server(BaseServer):
                 "oper_reason": oper_reason
             }
 
-            ban = self._config.bancmd.format(**info)
-            if d.type == MaskType.LETHAL:
-                await self.send_raw(ban)
-            elif d.type == MaskType.DLETHAL:
-                self.delayed_send.append((monotonic(), ban))
+            out: Optional[str] = None
+            if d.type & MaskType.LETHAL:
+                out = self._config.bancmd.format(**info)
             elif d.type == MaskType.KILL:
-                await self.send(build("KILL", [nick, user_reason]))
+                out = f"KILL {nick} :{user_reason}"
 
-            if (d.type == MaskType.EXCLUDE and
+            if out is None:
+                pass
+            elif d.type & MaskType.DELAYED:
+                self.delayed_send.append((monotonic(), out))
+            else:
+                await self.send_raw(out)
+
+            if (d.type & MaskType.EXCLUDE and
                     len(types) == 1):
                 # we matched an EXCLUDE but no other types.
                 # do not log
