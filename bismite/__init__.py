@@ -262,6 +262,7 @@ class Server(BaseServer):
                     (
                         f"MASK: {d.type.name} mask {mask_id} "
                         f"{nick}!{user.user}@{user.host} {user.real}"
+                        f" [{oper_reason}]"
                     )
                 ]))
 
