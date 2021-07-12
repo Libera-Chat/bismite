@@ -1,10 +1,10 @@
 import asyncio, re, traceback
 from collections import deque, OrderedDict
 from datetime    import datetime
+from random      import randint
 from time        import monotonic, time
 from typing      import Any, Deque, Dict, List, Optional, Tuple
 from typing      import OrderedDict as TOrderedDict
-
 
 from irctokens import build, Line, Hostmask
 from ircrobots import Bot as BaseBot
@@ -239,6 +239,7 @@ class Server(BaseServer):
                 "ident":  ident,
                 "user":   user,
                 "reason": reason,
+                "rand":   randint(160, 320),
                 "user_reason": user_reason,
                 "oper_reason": oper_reason
             }
