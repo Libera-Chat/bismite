@@ -571,7 +571,9 @@ class Server(BaseServer):
         for mask_id, _ in self._compiled_masks.items():
             mask, d = await self._database.masks.get(mask_id)
             outs.append(self._mask_format(mask_id, mask, d))
-        return outs or ["no masks"]
+
+        outs.append(f"{len(outs)} active masks")
+        return outs
 
     @usage("<alias> <text ...>")
     async def cmd_addreason(self, oper: Optional[str], nick: str, args: str):
