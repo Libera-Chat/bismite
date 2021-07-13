@@ -26,7 +26,7 @@ class MaskModifier(IntFlag):
     DELAY  = 0b001 << 4
     SILENT = 0b010 << 4
 
-def mtype_action(
+def mtype_getaction(
         mtype: int
         ) -> MaskAction:
     action = mtype & 0xf # get lowest 4 bits
@@ -49,7 +49,7 @@ def mtype_fromstring(mstr: str) -> int:
     return mtype
 
 def mtype_tostring(mtype: int) -> str:
-    action = mtype_action(mtype)
+    action = mtype_getaction(mtype)
     parts: List[str] = [action.name]
 
     if mtype & MaskModifier.DELAY:
@@ -66,7 +66,7 @@ MASK_SORT = [
 ]
 def mtype_weight(mtype: int) -> int:
     # split action and modifiers
-    action    = mtype_action(mtype)
+    action    = mtype_getaction(mtype)
     modifiers = mtype>>4
     # get maximum modifier bit count so we know how far left
     # we need to bitshift `action`

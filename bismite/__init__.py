@@ -19,7 +19,7 @@ from .database import Database
 
 from .common   import Event, MaskAction, MaskModifier, User, to_pretty_time
 from .common   import (mask_compile, mask_find, mask_token, mtype_weight,
-    mtype_tostring, mtype_fromstring)
+    mtype_tostring, mtype_fromstring, mtype_getaction)
 
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
@@ -223,7 +223,7 @@ class Server(BaseServer):
             )
 
             mask_id, (mask, d) = matches[0]
-            mtype_action       = mtype_action(d.type)
+            mtype_action       = mtype_getaction(d.type)
 
             ident  = user.user
             # if the user doesn't have identd, bin the whole host
@@ -247,19 +247,19 @@ class Server(BaseServer):
             }
 
             action: Optional[str] = None
-            if   mtype_action == MaskType.LETHAL:
+            if   mtype_action == MaskAction.LETHAL:
                 action = self._config.bancmd.format(**info)
-            elif mtype_action == MaskType.KILL:
+            elif mtype_action == MaskAction.KILL:
                 action = f"KILL {nick} :{user_reason}"
 
             if action is None:
                 pass
-            elif d.type & MaskModifier.DELAYED:
+            elif d.type & MaskModifier.DELAY:
                 self.delayed_send.append((monotonic(), action))
             else:
                 await self.send_raw(action)
 
-            if (mtype_action == MaskType.EXCLUDE and
+            if (mtype_action == MaskAction.EXCLUDE and
                     len(types) == 1):
                 # we matched an EXCLUDE but no other types.
                 # do not log
