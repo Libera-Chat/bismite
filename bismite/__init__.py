@@ -240,6 +240,7 @@ class Server(BaseServer):
                 "user":   user,
                 "reason": reason,
                 "rand":   randint(160, 320),
+                "mask_id":     str(mask_id),
                 "user_reason": user_reason,
                 "oper_reason": oper_reason
             }
