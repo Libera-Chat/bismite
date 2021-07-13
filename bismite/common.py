@@ -65,7 +65,9 @@ MASK_SORT = [
     MaskAction.EXCLUDE
 ]
 def mtype_weight(mtype: int) -> int:
-    action, modifier = mask_split(mtype)
+    # split action and modifiers
+    action    = mtype_action(mtype)
+    modifiers = mtype>>4
     # get maximum modifier bit count so we know how far left
     # we need to bitshift `action`
     modifier_offset  = max(MaskModifier).value.bit_length()
@@ -75,7 +77,7 @@ def mtype_weight(mtype: int) -> int:
     # LETHAL|NONE, LETHAL|DELAY, EXCLUDE|NONE
     # and rewrite action by MASK_SORT weight so it'll sort as
     # EXCLUDE|NONE, LETHAL|DELAY, LETHAL|NONE
-    return (MASK_SORT.index(action)<<modifier_offset) + modifier
+    return (MASK_SORT.index(action)<<modifier_offset) + modifiers
 
 class Event(Enum):
     CONNECT = 1
