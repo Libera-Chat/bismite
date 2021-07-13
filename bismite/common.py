@@ -17,9 +17,9 @@ class User(object):
     connected: bool = True
 
 class MaskAction(IntEnum):
+    KILL    = 0
     WARN    = 1
     LETHAL  = 2
-    KILL    = 3
     EXCLUDE = 4
 class MaskModifier(IntFlag):
     NONE   = 0
