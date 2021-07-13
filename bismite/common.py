@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from enum        import Enum, IntEnum
+from enum        import Enum, IntEnum, IntFlag
 from typing      import Pattern, Optional, Set, Tuple
 
 from ircrobots.formatting import strip as format_strip
@@ -16,23 +16,66 @@ class User(object):
 
     connected: bool = True
 
-class MaskType(IntEnum):
-    WARN    = 0b00001
-    LETHAL  = 0b00010
-    EXCLUDE = 0b00100
-    DELAYED = 0b01000
-    DLETHAL = 0b01010
-    KILL    = 0b10000
+class MaskAction(IntEnum):
+    WARN    = 1
+    LETHAL  = 2
+    KILL    = 3
+    EXCLUDE = 4
+class MaskModifier(IntFlag):
+    NONE   = 0
+    DELAY  = 0b001 << 4
+    SILENT = 0b010 << 4
+
+def mtype_action(
+        mtype: int
+        ) -> MaskAction:
+    action = mtype & 0xf # get lowest 4 bits
+    return MaskAction(action)
+
+def mtype_fromstring(mstr: str) -> int:
+    actions_available = {a.name for a in MaskAction}
+    action, *modifiers = mstr.upper().split("|")
+    if action in actions_available:
+        mtype = MaskAction[action]
+    else:
+        raise ValueError(f"unknown mask action \2{action}\2")
+
+    modifiers_available = {m.name for m in MaskModifier}
+    for modifier in modifiers:
+        if modifier in modifiers_available:
+            mtype |= MaskModifier[modifier]
+        else:
+            raise ValueError(f"unknown mask modifier \2{modifier}\2")
+    return mtype
+
+def mtype_tostring(mtype: int) -> str:
+    action = mtype_action(mtype)
+    parts: List[str] = [action.name]
+
+    if mtype & MaskModifier.DELAY:
+        parts.append("DELAY")
+    if mtype & MaskModifier.SILENT:
+        parts.append("SILENT")
+    return "|".join(parts)
 
 MASK_SORT = [
-    MaskType.WARN,
-    MaskType.KILL,
-    MaskType.LETHAL,
-    MaskType.DLETHAL,
-    MaskType.EXCLUDE
+    MaskAction.WARN,
+    MaskAction.KILL,
+    MaskAction.LETHAL,
+    MaskAction.EXCLUDE
 ]
-def mask_weight(mtype: MaskType) -> int:
-    return MASK_SORT.index(mtype)
+def mtype_weight(mtype: int) -> int:
+    action, modifier = mask_split(mtype)
+    # get maximum modifier bit count so we know how far left
+    # we need to bitshift `action`
+    modifier_offset  = max(MaskModifier).value.bit_length()
+    # swap order of modifier|action so instead of
+    # NONE|LETHAL, DELAY|LETHAL, NONE|EXCLUDE
+    # we'd have
+    # LETHAL|NONE, LETHAL|DELAY, EXCLUDE|NONE
+    # and rewrite action by MASK_SORT weight so it'll sort as
+    # EXCLUDE|NONE, LETHAL|DELAY, LETHAL|NONE
+    return (MASK_SORT.index(action)<<modifier_offset) + modifier
 
 class Event(Enum):
     CONNECT = 1
@@ -40,7 +83,7 @@ class Event(Enum):
 
 @dataclass
 class MaskDetails(object):
-    type:     MaskType
+    type:     int
     enabled:  bool
     reason:   Optional[str]
     hits:     int

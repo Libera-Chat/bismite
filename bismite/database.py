@@ -4,7 +4,7 @@ from time        import time
 from typing      import Dict, List, Optional, Tuple
 import aiosqlite
 
-from .common import MaskDetails, MaskType
+from .common import MaskDetails, MaskAction, mtype_tostring
 
 # schema, also in make-database.sql
 #
@@ -39,7 +39,7 @@ class Masks(Table):
             await db.execute("""
                 INSERT INTO masks (mask, type, enabled, reason, hits)
                 VALUES (?, ?, 1, ?, 0)
-            """, [mask, MaskType.WARN.value, reason])
+            """, [mask, MaskAction.WARN.value, reason])
             await db.commit()
 
             cursor = await db.execute("""
@@ -79,9 +79,9 @@ class Masks(Table):
             """, [mask_id])
 
             row = await cursor.fetchone()
-            mask, type, enabled, reason, hits, last_hit = row
+            mask, mtype, enabled, reason, hits, last_hit = row
             details = MaskDetails(
-                MaskType(type),
+                mtype,
                 enabled,
                 reason,
                 hits,
@@ -118,20 +118,21 @@ class Masks(Table):
             return enabled
 
     async def set_type(self,
-            by_nick:   str,
-            by_oper:   Optional[str],
-            mask_id:   int,
-            mask_type: MaskType):
+            by_nick: str,
+            by_oper: Optional[str],
+            mask_id: int,
+            mtype:   int):
         async with aiosqlite.connect(self._db_location) as db:
             await db.execute("""
                 UPDATE masks
                 SET type=?
                 WHERE id=?
-            """, [mask_type.value, mask_id])
+            """, [mtype, mask_id])
+            mtype_str = mtype_tostring(mtype)
             await db.execute("""
                 INSERT INTO changes (mask_id, by_nick, by_oper, time, change)
                 VALUES (?, ?, ?, ?, ?)
-            """, [mask_id, by_nick, by_oper, int(time()), f'type {mask_type.name}'])
+            """, [mask_id, by_nick, by_oper, int(time()), f'type {mtype_str}'])
             await db.commit()
 
     async def hit(self, mask_id: int):
