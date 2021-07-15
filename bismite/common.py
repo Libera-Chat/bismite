@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 from enum        import Enum, IntEnum
+from fnmatch     import translate as glob_translate
 from typing      import Pattern, Optional, Set, Tuple
 
 from ircrobots.formatting import strip as format_strip
@@ -102,12 +103,17 @@ def mask_compile(
         flags.remove("N")
 
     if delim in {"\"", "'"}:
+        # string literal
         mask = _unescape(mask, delim)
         mask = re.escape(mask)
         if "^" in flags:
             mask = f"^{mask}"
         if "$" in flags:
             mask = f"{mask}$"
+    elif delim == "@": # what's a better char?
+        # glob
+        mask = glob_translate(mask)
+        mask = fr"\A{mask}"
 
     return re.compile(mask, rflags), flags
 
