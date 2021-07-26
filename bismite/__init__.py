@@ -242,6 +242,7 @@ class Server(BaseServer):
                 "user":   user,
                 "reason": reason,
                 "rand":   randint(160, 320),
+                "mask_id":     str(mask_id),
                 "user_reason": user_reason,
                 "oper_reason": oper_reason
             }
@@ -467,6 +468,7 @@ class Server(BaseServer):
 
     @usage("/<regex>/ <public reason>[|<oper reason>]")
     @usage('"<string>" <public reason>[|<oper reason>]')
+    @usage('@<glob>@ <public reason>[|<oper reason>]')
     async def cmd_addmask(self, oper: Optional[str], nick: str, args: str):
         try:
             mask, args   = mask_token(args)
@@ -584,7 +586,9 @@ class Server(BaseServer):
         for mask_id, _ in self._compiled_masks.items():
             mask, d = await self._database.masks.get(mask_id)
             outs.append(self._mask_format(mask_id, mask, d))
-        return outs or ["no masks"]
+
+        outs.append(f"{len(outs)} active masks")
+        return outs
 
     @usage("<alias> <text ...>")
     async def cmd_addreason(self, oper: Optional[str], nick: str, args: str):
