@@ -587,6 +587,9 @@ class Server(BaseServer):
                     expire = int(time()) + expire
 
                 await self._database.masks.set_expire(mask_id, expire)
+                await self._database.changes.add(
+                    mask_id, caller.source, caller.oper, f"expire {timespec}"
+                )
                 outs.append(f"{mask} expiry set to {timespec}")
             else:
                 raise UsageError("expiry must be in format +1w2d/~1w2d")

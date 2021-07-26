@@ -92,13 +92,15 @@ async def expire_masks(
             if mtype_action in {MaskAction.KILL, MaskAction.LETHAL}:
                 # downgrade to WARN
                 await db.masks.set_type(source, '', mask_id, MaskAction.WARN)
+                await db.changes.add(mask_id, source, '', "expire to WARN")
                 await server.report(
                     f"MASK:EXPIRE: \x02{mask}\x02 {mtype_str} -> WARN"
                 )
             else:
                 # downgrade to disabled
-                await db.masks.set_expire(None)
-                await db.masks.toggle(source, '', mask_id)
+                await db.masks.set_expire(mask_id, None)
+                await db.masks.toggle(mask_id)
+                await db.changes.add(mask_id, source, '', "expire")
                 del server.active_masks[mask_id]
                 await server.report(
                     f"MASK:EXPIRE: \x02{mask}\x02 {mtype_str}"
