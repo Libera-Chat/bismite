@@ -18,9 +18,10 @@ from ircchallenge         import Challenge
 from .config   import Config
 from .database import Database
 
-from .common   import Event, MaskAction, MaskModifier, User, to_pretty_time
+from .common   import Event, MaskAction, MaskModifier, User
 from .common   import (mask_compile, mask_find, mask_token, mtype_weight,
     mtype_tostring, mtype_fromstring, mtype_getaction)
+from .common   import from_pretty_time, to_pretty_time
 
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
@@ -53,17 +54,18 @@ class UsageError(Exception):
 
 class Server(BaseServer):
     def __init__(self,
-            bot:    BaseBot,
-            name:   str,
-            config: Config):
+            bot:      BaseBot,
+            name:     str,
+            config:   Config,
+            database: Database):
 
         super().__init__(bot, name)
-        self._config  = config
-        self._database = Database(config.database)
+        self._config   = config
+        self._database = database
 
         self._users:          Dict[str, User] = {}
         self._recent_masks:   Deque[List[str]] = deque()
-        self._compiled_masks: TOrderedDict[int, Pattern] = OrderedDict()
+        self.active_masks:    TOrderedDict[int, Pattern] = OrderedDict()
         self._reasons:        Dict[str, str] = {}
 
         self.delayed_send: Deque[Tuple[int, str]] = deque()
@@ -184,7 +186,7 @@ class Server(BaseServer):
             self._recent_masks.popleft()
 
         matches: List[int] = []
-        for mask_id, pattern in self._compiled_masks.items():
+        for mask_id, pattern in self.active_masks.items():
             for ref in references:
                 if pattern.search(ref):
                     matches.append(mask_id)
@@ -260,21 +262,21 @@ class Server(BaseServer):
                 pass
             elif not d.type & MaskModifier.SILENT:
                 mtype_str = mtype_tostring(d.type)
-                await self.send(build("PRIVMSG", [
-                    self._config.channel,
-                    (
-                        f"MASK: {mtype_str} mask {mask_id} "
-                        f"{nick}!{user.user}@{user.host} {user.real}"
-                    )
-                ]))
+                await self.report(
+                    f"MASK: {mtype_str} mask {mask_id} "
+                    f"{nick}!{user.user}@{user.host} {user.real}"
+                )
+
+    async def report(self, message: str):
+        await self.send(build("PRIVMSG", [self._config.channel, message]))
 
     async def line_read(self, line: Line):
         if line.command == RPL_WELCOME:
-            self._compiled_masks.clear()
+            self.active_masks.clear()
             self._reasons.clear()
             # load and compile all masks/reason templates
             for mask_id, mask in await self._database.masks.list_enabled():
-                self._compiled_masks[mask_id] = mask_compile(mask)
+                self.active_masks[mask_id] = mask_compile(mask)
 
             for key, value in await self._database.reasons.list():
                 self._reasons[key] = value
@@ -416,7 +418,7 @@ class Server(BaseServer):
             ) -> str:
 
         last_hit = ""
-        if details.last_hit is not None:
+        if details.hits > 0:
             last_hit = to_pretty_time(int(time()-details.last_hit))
             last_hit = f", last hit {last_hit} ago"
 
@@ -492,7 +494,7 @@ class Server(BaseServer):
         await self._database.changes.add(
             mask_id, caller.source, caller.oper, "add"
         )
-        self._compiled_masks[mask_id] = cmask
+        self.active_masks[mask_id] = cmask
 
         # check/warn about how many users this will hit
         matches = 0
@@ -537,12 +539,12 @@ class Server(BaseServer):
         )
 
         if enabled:
-            self._compiled_masks[mask_id] = mask_compile(mask)
-            self._compiled_masks = OrderedDict(
-                sorted(self._compiled_masks.items())
+            self.active_masks[mask_id] = mask_compile(mask)
+            self.active_masks = OrderedDict(
+                sorted(self.active_masks.items())
             )
         else:
-            del self._compiled_masks[mask_id]
+            del self.active_masks[mask_id]
 
         mtype_str = mtype_tostring(d.type)
         who = f"{caller.nick} ({caller.oper})"
@@ -569,13 +571,35 @@ class Server(BaseServer):
         if not await self._database.masks.has_id(mask_id):
             return [f"unknown mask id {mask_id}"]
 
+        mask, d = await self._database.masks.get(mask_id)
+
+        outs: List[str] = []
+
+        if args[1][0] in {"~", "+"}:
+            timespec = args.pop(1)
+            relative = timespec == "+"
+            expire   = from_pretty_time(timespec[1:])
+
+            if expire:
+                if relative:
+                    expire = -expire
+                else:
+                    expire = int(time()) + expire
+
+                await self._database.masks.set_expire(mask_id, expire)
+                outs.append(f"{mask} expiry set to {timespec}")
+            else:
+                raise UsageError("expiry must be in format +1w2d/~1w2d")
+
+        if not args[1:]:
+            return outs
+
         try:
             mtype = mtype_fromstring(args[1])
         except ValueError as e:
             raise UsageError(str(e))
 
         mtype_str = mtype_tostring(mtype)
-        mask, d   = await self._database.masks.get(mask_id)
         if d.type == mtype:
             return [f"{mask} is already \2{mtype_str}\2"]
 
@@ -590,7 +614,9 @@ class Server(BaseServer):
         log = f"{who} SETMASK: type {mtype_str} \x02{mask}\x02 (was {pmtype_str})"
         await self.send(build("PRIVMSG", [self._config.channel, log]))
 
-        return [f"{mask} changed from \2{pmtype_str}\2 to \2{mtype_str}\2"]
+        out = f"{mask} changed from \2{pmtype_str}\2 to \2{mtype_str}\2"
+        outs.insert(0, out)
+        return outs
 
     async def cmd_listmask(self,
             caller: Caller,
@@ -598,7 +624,7 @@ class Server(BaseServer):
             ) -> List[str]:
 
         outs: List[str] = []
-        for mask_id, _ in self._compiled_masks.items():
+        for mask_id, _ in self.active_masks.items():
             mask, d = await self._database.masks.get(mask_id)
             outs.append(self._mask_format(mask_id, mask, d))
 
@@ -713,9 +739,12 @@ class Server(BaseServer):
         print(f"> {line.format()}")
 
 class Bot(BaseBot):
-    def __init__(self, config: Config):
+    def __init__(self,
+            config:   Config,
+            database: Database):
         super().__init__()
-        self._config = config
+        self._config   = config
+        self._database = database
 
     def create_server(self, name: str):
-        return Server(self, name, self._config)
+        return Server(self, name, self._config, self._database)
