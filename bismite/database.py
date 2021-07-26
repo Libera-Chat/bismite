@@ -4,7 +4,7 @@ from time        import time
 from typing      import Dict, List, Optional, Tuple
 import aiosqlite
 
-from .common import MaskDetails, MaskAction, mtype_tostring
+from .common import MaskDetails, MaskAction
 
 # schema, also in make-database.sql
 #
@@ -35,8 +35,6 @@ class Table(object):
 
 class Masks(Table):
     async def add(self,
-            by_nick:     str,
-            by_oper: Optional[str],
             mask:   str,
             reason: Optional[str]):
 
@@ -53,15 +51,7 @@ class Masks(Table):
                 ORDER BY id DESC
                 LIMIT 1
             """)
-            mask_id = (await cursor.fetchone())[0]
-
-            await db.execute("""
-                INSERT INTO changes (mask_id, by_nick, by_oper, time, change)
-                VALUES (?, ?, ?, ?, ?)
-            """, [mask_id, by_nick, by_oper, int(time()), 'add'])
-            await db.commit()
-
-            return mask_id
+            return (await cursor.fetchone())[0]
 
     async def has_id(self, mask_id: int) -> bool:
         async with aiosqlite.connect(self._db_location) as db:
@@ -94,12 +84,7 @@ class Masks(Table):
             )
             return (mask, details)
 
-    async def toggle(self,
-            by_nick: str,
-            by_oper: Optional[str],
-            mask_id: int
-            ) -> bool:
-
+    async def toggle(self, mask_id: int) -> bool:
         async with aiosqlite.connect(self._db_location) as db:
             cursor = await db.execute("""
                 SELECT enabled
@@ -114,30 +99,20 @@ class Masks(Table):
                 SET enabled=?
                 WHERE id=?
             """, [enabled, mask_id])
-            await db.execute("""
-                INSERT INTO changes (mask_id, by_nick, by_oper, time, change)
-                VALUES (?, ?, ?, ?, ?)
-            """, [mask_id, by_nick, by_oper, int(time()), f'enabled {enabled}'])
             await db.commit()
 
             return enabled
 
     async def set_type(self,
-            by_nick: str,
-            by_oper: Optional[str],
             mask_id: int,
             mtype:   int):
+
         async with aiosqlite.connect(self._db_location) as db:
             await db.execute("""
                 UPDATE masks
                 SET type=?
                 WHERE id=?
             """, [mtype, mask_id])
-            mtype_str = mtype_tostring(mtype)
-            await db.execute("""
-                INSERT INTO changes (mask_id, by_nick, by_oper, time, change)
-                VALUES (?, ?, ?, ?, ?)
-            """, [mask_id, by_nick, by_oper, int(time()), f'type {mtype_str}'])
             await db.commit()
 
     async def hit(self, mask_id: int):
@@ -166,17 +141,34 @@ class Masks(Table):
             """)
             return await cursor.fetchall()
 
-    async def history(self,
+class Changes(Table):
+    async def add(self,
+            mask_id:   int,
+            by_source: str,
+            by_oper:   Optional[str],
+            action:    str):
+
+        async with aiosqlite.connect(self._db_location) as db:
+            await db.execute("""
+                INSERT INTO changes
+                (mask_id, by_source, by_oper, time, change)
+                VALUES (?, ?, ?, ?, ?)
+            """, [mask_id, by_source, by_oper, int(time()), action])
+            await db.commit()
+
+    async def get(self,
             mask_id: int
             ) -> List[Tuple[str, int, str]]:
+
         async with aiosqlite.connect(self._db_location) as db:
             cursor = await db.execute("""
-                SELECT by_nick, by_oper, time, change
+                SELECT by_source, by_oper, time, change
                 FROM changes
                 WHERE mask_id=?
                 ORDER BY time
             """, [mask_id])
             return await cursor.fetchall()
+
 
 class Reasons(Table):
     async def add(self,
@@ -220,4 +212,5 @@ class Reasons(Table):
 class Database(object):
     def __init__(self, location: str):
         self.masks   = Masks(location)
+        self.changes = Changes(location)
         self.reasons = Reasons(location)
