@@ -537,12 +537,13 @@ class Server(BaseServer):
         else:
             who = f"{nick}"
 
+        mtype_str = mtype_tostring(d.type)
         out = (
             f"{who} TOGGLEMASK: {enabled_s}"
-            f" {d.type.name} mask \x02{mask}\x02"
+            f" {mtype_str} mask \x02{mask}\x02"
         )
         await self.send(build("PRIVMSG", [self._config.channel, out]))
-        return [f"{d.type.name} mask {mask_id} {enabled_s}"]
+        return [f"{mtype_str} mask {mask_id} {enabled_s}"]
 
     @usage("<id> <type>")
     async def cmd_setmask(self, oper: Optional[str], nick: str, sargs: str):
