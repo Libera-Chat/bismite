@@ -17,8 +17,9 @@ from ircchallenge         import Challenge
 from .config   import Config
 from .database import Database
 
-from .common   import Event, MaskType, User, to_pretty_time
-from .common   import mask_compile, mask_find, mask_token, mask_weight
+from .common   import Event, MaskAction, MaskModifier, User, to_pretty_time
+from .common   import (mask_compile, mask_find, mask_token, mtype_weight,
+    mtype_tostring, mtype_fromstring, mtype_getaction)
 
 # not in ircstates yet...
 RPL_RSACHALLENGE2      = "740"
@@ -217,11 +218,12 @@ class Server(BaseServer):
             # sort by mask type, descending
             # this should order: exclude, dlethal, lethal, kill, warn
             matches.sort(
-                key=lambda m: mask_weight(m[1][1].type),
+                key=lambda m: mtype_weight(m[1][1].type),
                 reverse=True
             )
 
             mask_id, (mask, d) = matches[0]
+            mtype_action       = mtype_getaction(d.type)
 
             ident  = user.user
             # if the user doesn't have identd, bin the whole host
@@ -245,24 +247,30 @@ class Server(BaseServer):
                 "oper_reason": oper_reason
             }
 
-            ban = self._config.bancmd.format(**info)
-            if d.type == MaskType.LETHAL:
-                await self.send_raw(ban)
-            elif d.type == MaskType.DLETHAL:
-                self.delayed_send.append((monotonic(), ban))
-            elif d.type == MaskType.KILL:
-                await self.send(build("KILL", [nick, user_reason]))
+            action: Optional[str] = None
+            if   mtype_action == MaskAction.LETHAL:
+                action = self._config.bancmd.format(**info)
+            elif mtype_action == MaskAction.KILL:
+                action = f"KILL {nick} :{user_reason}"
 
-            if (d.type == MaskType.EXCLUDE and
+            if action is None:
+                pass
+            elif d.type & MaskModifier.DELAY:
+                self.delayed_send.append((monotonic(), action))
+            else:
+                await self.send_raw(action)
+
+            if (mtype_action == MaskAction.EXCLUDE and
                     len(types) == 1):
                 # we matched an EXCLUDE but no other types.
                 # do not log
                 pass
-            else:
+            elif not d.type & MaskModifier.SILENT:
+                mtype_str = mtype_tostring(d.type)
                 await self.send(build("PRIVMSG", [
                     self._config.channel,
                     (
-                        f"MASK: {d.type.name} mask {mask_id} "
+                        f"MASK: {mtype_str} mask {mask_id} "
                         f"{nick}!{user.user}@{user.host} {user.real}"
                     )
                 ]))
@@ -419,11 +427,12 @@ class Server(BaseServer):
             last_hit = to_pretty_time(int(time()-details.last_hit))
             last_hit = f", last hit {last_hit} ago"
 
+        mtype_str = mtype_tostring(details.type)
         return (
             f"{str(mask_id).rjust(3)}:"
             f" \x02{mask}\x02"
             f" ({details.hits} hits{last_hit})"
-            f" \x02{details.type.name}\x02"
+            f" \x02{mtype_str}\x02"
             f" [{details.reason or ''}]"
         )
 
@@ -530,42 +539,47 @@ class Server(BaseServer):
         else:
             who = f"{nick}"
 
+        mtype_str = mtype_tostring(d.type)
         out = (
             f"{who} TOGGLEMASK: {enabled_s}"
-            f" {d.type.name} mask \x02{mask}\x02"
+            f" {mtype_str} mask \x02{mask}\x02"
         )
         await self.send(build("PRIVMSG", [self._config.channel, out]))
-        return [f"{d.type.name} mask {mask_id} {enabled_s}"]
+        return [f"{mtype_str} mask {mask_id} {enabled_s}"]
 
     @usage("<id> <type>")
     async def cmd_setmask(self, oper: Optional[str], nick: str, sargs: str):
-        args   = sargs.split()
-        mtypes = {m.name for m in MaskType}
+        args = sargs.split()
         if len(args) < 2:
             raise UsageError("not enough params")
         elif not args[0].isdigit():
             raise UsageError("that's not an id/number")
-        elif not args[1].upper() in mtypes:
-            return [f"mask type must be one of {mtypes!r}"]
 
-        mask_id   = int(args[0])
-        mask_type = MaskType[args[1].upper()]
+        mask_id = int(args[0])
         if not await self._database.masks.has_id(mask_id):
             return [f"unknown mask id {mask_id}"]
 
-        mask, d = await self._database.masks.get(mask_id)
-        if d.type == mask_type:
-            return [f"{mask} is already {mask_type.name}"]
+        try:
+            mtype = mtype_fromstring(args[1])
+        except ValueError as e:
+            raise UsageError(str(e))
+
+        mtype_str = mtype_tostring(mtype)
+        mask, d   = await self._database.masks.get(mask_id)
+        if d.type == mtype:
+            return [f"{mask} is already \2{mtype_str}\2"]
         if oper is not None:
             who = f"{nick} ({oper})"
         else:
             who = f"{nick}"
-        await self._database.masks.set_type(nick, oper, mask_id, mask_type)
+        await self._database.masks.set_type(nick, oper, mask_id, mtype)
 
-        log = f"{who} SETMASK: type {mask_type.name} \x02{mask}\x02 (was {d.type.name})"
+        # *p*revious mtype_str
+        pmtype_str = mtype_tostring(d.type)
+        log = f"{who} SETMASK: type {mtype_str} \x02{mask}\x02 (was {pmtype_str})"
         await self.send(build("PRIVMSG", [self._config.channel, log]))
 
-        return [f"{mask} changed from {d.type.name} to {mask_type.name}"]
+        return [f"{mask} changed from \2{pmtype_str}\2 to \2{mtype_str}\2"]
 
     async def cmd_listmask(self, oper: Optional[str], nick: str, args: str):
         outs: List[str] = []
