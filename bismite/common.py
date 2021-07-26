@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from enum        import Enum, IntEnum, IntFlag
 from fnmatch     import translate as glob_translate
-from typing      import Pattern, Optional, Set, Tuple
+from typing      import Any, Dict, Pattern, Optional, Set, Tuple
 
 from ircrobots.formatting import strip as format_strip
 
@@ -119,33 +119,25 @@ def _find_unescaped(s: str, c: str):
     else:
         return -1
 
-FLAGS_INCONSEQUENTIAL = set("^$i")
-def mask_compile(
-        mask:  str
-        ) -> Tuple[Pattern, Set[str]]:
+def _maskflag_match(
+        flags:   Set[str],
+        options: Dict[str, str],
+        ) -> str:
 
-    delim        = mask[0]
-    mask_end     = _find_unescaped(mask, delim)
-    mask, sflags = mask[1:mask_end-1], mask[mask_end:]
+    available = set(options.keys())&flags
+    if available:
+        return options[list(available)[0]]
+    else:
+        return options[""]
+
+def mask_compile(mask: str) -> Pattern:
+    delim       = mask[0]
+    mask_end    = _find_unescaped(mask, delim)
+    mask, flags = mask[1:mask_end-1], set(mask[mask_end:])
 
     if not mask:
         # empty string
         raise ValueError("empty mask provided")
-
-    rflags = 0
-    if "i" in sflags:
-        rflags |= re.I
-
-    flags  = set(sflags)
-    flags -= FLAGS_INCONSEQUENTIAL
-
-    # flags should be expressed as "only match x" rather than "also match x"
-    # "N" means "also match nick changes" but "n" means "only match connect"
-    # so if we have no "N", we add "n"
-    if not "N" in flags:
-        flags.add("n")
-    else:
-        flags.remove("N")
 
     if delim in {"\"", "'"}:
         # string literal
@@ -160,7 +152,28 @@ def mask_compile(
         mask = glob_translate(mask)
         mask = fr"\A{mask}"
 
-    return re.compile(mask, rflags), flags
+    # we somewhat abuse re.MULTILINE so we can match arbitrary characteristics
+    # about users by putting flags before their `nick!user@host real`
+    # e.g. a user connecting with a no account using tls would be:
+    #   "010\nnick!user@host real"
+    # then we'd take a mask like /^jess-test!/A and turn it in to
+    #   re.compile(r"0.0\n.*^jess-test!", re.MULTILINE)
+    # re.MULTLINE means the ^ in the mask is still valid, but we were able to
+    # insert a secondary matching criteria before the mask with its own ^.
+
+    mask = "".join([
+        "^",
+        _maskflag_match(flags, {'': ".", "A": "0", "a": "1"}),
+        _maskflag_match(flags, {'': ".", "Z": "0", "z": "1"}),
+        _maskflag_match(flags, {'': "0", "N": "."}),
+        r"\n.*"
+    ]) + mask
+
+    re_flags = re.MULTILINE
+    if "i" in flags:
+        re_flags |= re.IGNORECASE
+
+    return re.compile(mask, re_flags)
 
 def mask_find(s: str):
     start = s[0]
