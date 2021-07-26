@@ -1,5 +1,6 @@
 import asyncio, re, traceback
 from collections import deque, OrderedDict
+from dataclasses import dataclass
 from datetime    import datetime
 from random      import randint
 from time        import monotonic, time
@@ -30,6 +31,12 @@ RPL_YOUREOPER          = "381"
 MAX_RECENT = 1000
 
 RE_OPERNAME = re.compile(r"^is opered as (\S+)(?:,|$)")
+
+@dataclass
+class Caller(object):
+    source: str
+    nick:   str
+    oper:   str
 
 # decorator, for command usage strings
 def usage(usage_string: str):
@@ -393,28 +400,29 @@ class Server(BaseServer):
                     await self.send(build("WHOIS", [new_nick]))
 
     async def cmd(self,
-            who:     Hostmask,
-            command: str,
-            args:    str):
+            hostmask: Hostmask,
+            command:  str,
+            args:     str):
 
-        opername = await self._get_oper(who.nickname)
+        opername = await self._get_oper(hostmask.nickname)
         if opername is not None:
-            opername = None if opername == "<grant>" else opername
             attrib  = f"cmd_{command}"
             if hasattr(self, attrib):
-                func = getattr(self, attrib)
+                caller = Caller(str(hostmask), hostmask.nickname, opername)
+                func   = getattr(self, attrib)
                 outs: List[str] = []
                 try:
-                    outs.extend(await func(opername, str(who), args))
+                    outs.extend(await func(caller, args))
                 except UsageError as e:
                     outs.append(str(e))
                     for usage in func._usage:
                         outs.append(f"usage: {command.upper()} {usage}")
 
                 for out in outs:
-                    await self.send(build("NOTICE", [who.nickname, out]))
+                    await self.send(build("NOTICE", [hostmask.nickname, out]))
             else:
-                await self.send(build("NOTICE", [who.nickname, f"\x02{command.upper()}\x02 is not a valid command"]))
+                err = f"\x02{command.upper()}\x02 is not a valid command"
+                await self.send(build("NOTICE", [hostmask.nickname, err]))
 
     def _mask_format(self,
             mask_id: int,
@@ -437,7 +445,11 @@ class Server(BaseServer):
         )
 
     @usage("<mask-id>")
-    async def cmd_getmask(self, oper: Optional[str], nick: str, sargs: str):
+    async def cmd_getmask(self,
+            caller: Caller,
+            sargs:  str
+            ) -> List[str]:
+
         args = sargs.split(None, 1)
         if not args:
             raise UsageError("please provide a mask id")
@@ -448,12 +460,12 @@ class Server(BaseServer):
         if not await self._database.masks.has_id(mask_id):
             return [f"unknown mask id {mask_id}"]
         mask, d = await self._database.masks.get(mask_id)
-        history = await self._database.masks.history(mask_id)
+        changes = await self._database.changes.get(mask_id)
 
         outs = [self._mask_format(mask_id, mask, d)]
-        if history:
+        if changes:
             outs.append("\x02changes:\x02")
-            for who_nick, who_oper, ts, change in history:
+            for who_nick, who_oper, ts, change in changes:
                 if who_oper is not None:
                     who = f"{who_nick} ({who_oper})"
                 else:
@@ -469,9 +481,13 @@ class Server(BaseServer):
     @usage("/<regex>/ <public reason>[|<oper reason>]")
     @usage('"<string>" <public reason>[|<oper reason>]')
     @usage('@<glob>@ <public reason>[|<oper reason>]')
-    async def cmd_addmask(self, oper: Optional[str], nick: str, args: str):
+    async def cmd_addmask(self,
+            caller: Caller,
+            args:   str
+            ) -> List[str]:
+
         try:
-            mask, args   = mask_token(args)
+            mask, args = mask_token(args)
             if not args:
                 raise UsageError("please provide a mask reason")
             cmask, flags = mask_compile(mask)
@@ -486,7 +502,10 @@ class Server(BaseServer):
         if not "|" in reason:
             reason = f"|{reason}"
 
-        mask_id = await self._database.masks.add(nick, oper, mask, reason)
+        mask_id = await self._database.masks.add(mask, reason)
+        await self._database.changes.add(
+            mask_id, caller.source, caller.oper, "add"
+        )
         self._compiled_masks[mask_id] = (cmask, flags)
 
         # check/warn about how many users this will hit
@@ -510,7 +529,11 @@ class Server(BaseServer):
         ]
 
     @usage("<mask-id>")
-    async def cmd_togglemask(self, oper: Optional[str], nick: str, sargs: str):
+    async def cmd_togglemask(self,
+            caller: Caller,
+            sargs:  str
+            ) -> List[str]:
+
         args = sargs.split(None, 1)
         if not args:
             raise UsageError("please provide a mask id")
@@ -522,8 +545,11 @@ class Server(BaseServer):
             return [f"unknown mask id {mask_id}"]
 
         mask, d   = await self._database.masks.get(mask_id)
-        enabled   = await self._database.masks.toggle(nick, oper, mask_id)
+        enabled   = await self._database.masks.toggle(mask_id)
         enabled_s = "enabled" if enabled else "disabled"
+        await self._database.changes.add(
+            mask_id, caller.source, caller.oper, enabled_s
+        )
 
         if enabled:
             cmask, flags = mask_compile(mask)
@@ -534,12 +560,8 @@ class Server(BaseServer):
         else:
             del self._compiled_masks[mask_id]
 
-        if oper is not None:
-            who = f"{nick} ({oper})"
-        else:
-            who = f"{nick}"
-
         mtype_str = mtype_tostring(d.type)
+        who = f"{caller.nick} ({caller.oper})"
         out = (
             f"{who} TOGGLEMASK: {enabled_s}"
             f" {mtype_str} mask \x02{mask}\x02"
@@ -548,7 +570,11 @@ class Server(BaseServer):
         return [f"{mtype_str} mask {mask_id} {enabled_s}"]
 
     @usage("<id> <type>")
-    async def cmd_setmask(self, oper: Optional[str], nick: str, sargs: str):
+    async def cmd_setmask(self,
+            caller: Caller,
+            sargs:  str
+            ) -> List[str]:
+
         args = sargs.split()
         if len(args) < 2:
             raise UsageError("not enough params")
@@ -568,20 +594,25 @@ class Server(BaseServer):
         mask, d   = await self._database.masks.get(mask_id)
         if d.type == mtype:
             return [f"{mask} is already \2{mtype_str}\2"]
-        if oper is not None:
-            who = f"{nick} ({oper})"
-        else:
-            who = f"{nick}"
-        await self._database.masks.set_type(nick, oper, mask_id, mtype)
+
+        await self._database.masks.set_type(mask_id, mtype)
+        await self._database.changes.add(
+            mask_id, caller.source, caller.oper, f"type {mtype_str}"
+        )
 
         # *p*revious mtype_str
         pmtype_str = mtype_tostring(d.type)
+        who = f"{caller.nick} ({caller.oper})"
         log = f"{who} SETMASK: type {mtype_str} \x02{mask}\x02 (was {pmtype_str})"
         await self.send(build("PRIVMSG", [self._config.channel, log]))
 
         return [f"{mask} changed from \2{pmtype_str}\2 to \2{mtype_str}\2"]
 
-    async def cmd_listmask(self, oper: Optional[str], nick: str, args: str):
+    async def cmd_listmask(self,
+            caller: Caller,
+            sargs:  str
+            ) -> List[str]:
+
         outs: List[str] = []
         for mask_id, _ in self._compiled_masks.items():
             mask, d = await self._database.masks.get(mask_id)
@@ -591,8 +622,12 @@ class Server(BaseServer):
         return outs
 
     @usage("<alias> <text ...>")
-    async def cmd_addreason(self, oper: Optional[str], nick: str, args: str):
-        args = args.split(None, 1)
+    async def cmd_addreason(self,
+            caller: Caller,
+            sargs:  str
+            ) -> List[str]:
+
+        args = sargs.split(None, 1)
         if len(args) < 2:
             raise UsageError("not enough params")
 
@@ -605,7 +640,11 @@ class Server(BaseServer):
         return [f"added reason alias \x02${alias}\x02"]
 
     @usage("<alias>")
-    async def cmd_delreason(self, oper: Optional[str], nick: str, args: str):
+    async def cmd_delreason(self,
+            caller: Caller,
+            sargs:  str
+            ) -> List[str]:
+
         args = sargs.split(None, 1)
         if len(args) < 1:
             raise UsageError("not enough params")
@@ -618,7 +657,11 @@ class Server(BaseServer):
         else:
             return [f"the reason alias \x02${alias}\x02 does not exist"]
 
-    async def cmd_listreason(self, oper: Optional[str], nick: str, args: str):
+    async def cmd_listreason(self,
+            caller: Caller,
+            args:   str
+            ) -> List[str]:
+
         args = args.split()
         outs: List[str] = []
         for key, value in self._reasons.items():
@@ -626,7 +669,11 @@ class Server(BaseServer):
         return outs or ["no reason aliases"]
 
     @usage("/<pattern>/")
-    async def cmd_testmask(self, oper: Optional[str], nick: str, args: str):
+    async def cmd_testmask(self,
+            caller: Caller,
+            args:   str
+            ) -> List[str]:
+
         try:
             mask, args   = mask_token(args)
             cmask, flags = mask_compile(mask)

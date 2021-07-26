@@ -10,11 +10,11 @@ CREATE TABLE masks (
     last_hit INTEGER
 );
 CREATE TABLE changes (
-    mask_id INTEGER NOT NULL,
-    by_nick TEXT NOT NULL,
-    by_oper TEXT,
-    time    INTEGER NOT NULL,
-    change  TEXT NOT NULL
+    mask_id   INTEGER NOT NULL,
+    by_source TEXT NOT NULL,
+    by_oper   TEXT,
+    time      INTEGER NOT NULL,
+    change    TEXT NOT NULL
 );
 CREATE TABLE reasons (
     key   TEXT NOT NULL PRIMARY KEY,
