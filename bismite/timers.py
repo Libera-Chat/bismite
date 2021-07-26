@@ -97,6 +97,7 @@ async def expire_masks(
                 )
             else:
                 # downgrade to disabled
+                await db.masks.set_expire(None)
                 await db.masks.toggle(source, '', mask_id)
                 del server.active_masks[mask_id]
                 await server.report(
