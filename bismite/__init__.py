@@ -606,7 +606,7 @@ class Server(BaseServer):
 
     @usage("<alias>")
     async def cmd_delreason(self, oper: Optional[str], nick: str, args: str):
-        args = args.split(1)
+        args = sargs.split(None, 1)
         if len(args) < 1:
             raise UsageError("not enough params")
 
