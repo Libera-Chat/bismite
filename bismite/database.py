@@ -23,6 +23,11 @@ from .common import MaskDetails, MaskAction, mtype_tostring
 #   by:      str not null
 #   time:    int not null
 #   change:  str not null
+#
+# reasons:
+#   key:   str not null
+#   value: str not null
+# primary key key
 
 class Table(object):
     def __init__(self, db_location: str):
