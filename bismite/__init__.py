@@ -62,9 +62,8 @@ class Server(BaseServer):
         self._database = Database(config.database)
 
         self._users:          Dict[str, User] = {}
-        self._recent_masks:   Deque[Tuple[List[str], Set[str]]] = deque()
-        self._compiled_masks: TOrderedDict[int, Tuple[Pattern, Set[str]]] \
-            = OrderedDict()
+        self._recent_masks:   Deque[List[str]] = deque()
+        self._compiled_masks: TOrderedDict[int, Pattern] = OrderedDict()
         self._reasons:        Dict[str, str] = {}
 
         self.delayed_send: Deque[Tuple[int, str]] = deque()
@@ -162,43 +161,30 @@ class Server(BaseServer):
             event: Event
             ) -> List[int]:
 
-        uflags: Set[str] = set()
-        if user.account is not None:
-            uflags.add("a")
-        else:
-            uflags.add("A")
+        uflags = "".join([
+            "0" if user.account is None   else "1",
+            "0" if not user.secure        else "1",
+            "0" if event == Event.CONNECT else "1",
+            "\n"
+        ])
 
-        if user.secure:
-            uflags.add("z")
-        else:
-            uflags.add("Z")
+        ni = nick
+        us = user.user
+        ho = user.host
+        ip = user.ip
+        re = user.real
 
-        if event == Event.CONNECT:
-            uflags.add("n")
+        references = [f"{uflags}{ni}!{us}@{ho} {re}"]
+        if user.ip is not None and not user.host == user.ip:
+            # if the user has an IP and IP != host, also match against IP
+            references.append(f"{uflags}{ni}!{us}@{ip} {re}")
 
-        references = [f"{nick}!{user.user}@{user.host} {user.real}"]
-        if user.ip is not None:
-            # has no i-line spoof
-            uflags.add("S")
-
-            if user.host == user.ip:
-                # if the user has an IP and IP != host, also match against IP
-                references.append(f"{nick}!{user.user}@{user.ip} {user.real}")
-        else:
-            # has an i-line spoof
-            uflags.add("s")
-
-        self._recent_masks.append((references, uflags))
+        self._recent_masks.append(references)
         if len(self._recent_masks) > MAX_RECENT:
             self._recent_masks.popleft()
 
         matches: List[int] = []
-        for mask_id, (pattern, flags) in self._compiled_masks.items():
-            # which flags does the pattern want that we've not got?
-            nflags = flags - uflags
-            if nflags:
-                continue
-
+        for mask_id, pattern in self._compiled_masks.items():
             for ref in references:
                 if pattern.search(ref):
                     matches.append(mask_id)
@@ -288,8 +274,7 @@ class Server(BaseServer):
             self._reasons.clear()
             # load and compile all masks/reason templates
             for mask_id, mask in await self._database.masks.list_enabled():
-                cmask, flags = mask_compile(mask)
-                self._compiled_masks[mask_id] = (cmask, flags)
+                self._compiled_masks[mask_id] = mask_compile(mask)
 
             for key, value in await self._database.reasons.list():
                 self._reasons[key] = value
@@ -488,13 +473,14 @@ class Server(BaseServer):
 
         try:
             mask, args = mask_token(args)
-            if not args:
-                raise UsageError("please provide a mask reason")
-            cmask, flags = mask_compile(mask)
+            cmask      = mask_compile(mask)
         except ValueError as e:
             raise UsageError(f"syntax error: {str(e)}")
         except re.error as e:
             return [f"regex compilation error: {str(e)}"]
+
+        if not args:
+            raise UsageError("please provide a mask reason")
 
         reason = args
         # if there's no explicit oper reason, assume this
@@ -506,7 +492,7 @@ class Server(BaseServer):
         await self._database.changes.add(
             mask_id, caller.source, caller.oper, "add"
         )
-        self._compiled_masks[mask_id] = (cmask, flags)
+        self._compiled_masks[mask_id] = cmask
 
         # check/warn about how many users this will hit
         matches = 0
@@ -515,10 +501,9 @@ class Server(BaseServer):
             if i == len(self._recent_masks):
                 break
             samples += 1
-            recent_masks, uflags = self._recent_masks[i]
+            recent_masks = self._recent_masks[i]
             for recent_mask in recent_masks:
-                nflags = flags - uflags
-                if not nflags and cmask.search(recent_mask):
+                if cmask.search(recent_mask):
                     matches += 1
                     # only breaks one level of `for`
                     break
@@ -552,8 +537,7 @@ class Server(BaseServer):
         )
 
         if enabled:
-            cmask, flags = mask_compile(mask)
-            self._compiled_masks[mask_id] = (cmask, flags)
+            self._compiled_masks[mask_id] = mask_compile(mask)
             self._compiled_masks = OrderedDict(
                 sorted(self._compiled_masks.items())
             )
@@ -675,8 +659,8 @@ class Server(BaseServer):
             ) -> List[str]:
 
         try:
-            mask, args   = mask_token(args)
-            cmask, flags = mask_compile(mask)
+            mask, args = mask_token(args)
+            cmask      = mask_compile(mask)
         except ValueError as e:
             raise UsageError(f"syntax error: {str(e)}")
         except re.error as e:
@@ -692,10 +676,9 @@ class Server(BaseServer):
             if i == len(self._recent_masks):
                 break
             samples += 1
-            recent_masks, uflags = self._recent_masks[i]
+            recent_masks = self._recent_masks[i]
             for recent_mask in recent_masks:
-                nflags = flags - uflags
-                if not nflags and cmask.search(recent_mask):
+                if cmask.search(recent_mask):
                     matches.append(recent_mask)
                     # only breaks one level of `for`
                     break
@@ -712,6 +695,17 @@ class Server(BaseServer):
         else:
             outs.insert(0, f"mask \x02{mask}\x02 matches 0 out of {samples}")
         return outs
+
+    async def cmd_compilemask(self, oper: Optional[str], nick: str, args: str):
+        try:
+            mask, args = mask_token(args)
+            cmask      = mask_compile(mask)
+        except ValueError as e:
+            raise UsageError(f"syntax error: {str(e)}")
+        except re.error as e:
+            return [f"regex compilation error: {str(e)}"]
+
+        return [f"\x02{mask}\x02 compiles to: {cmask.pattern}"]
 
     def line_preread(self, line: Line):
         print(f"< {line.format()}")
