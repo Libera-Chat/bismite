@@ -84,14 +84,6 @@ class Event(Enum):
     CONNECT = 1
     NICK    = 2
 
-@dataclass
-class MaskDetails(object):
-    type:     int
-    enabled:  bool
-    reason:   Optional[str]
-    hits:     int
-    last_hit: Optional[int]
-
 def _unescape(input: str, char: str):
     i   = 0
     out = ""
@@ -231,3 +223,15 @@ def to_pretty_time(total_seconds: int) -> str:
         out += f"{i}{unit}"
     return out
 
+RE_PRETTYTIME = re.compile("^(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?$")
+def from_pretty_time(s: str) -> Optional[int]:
+    match = RE_PRETTYTIME.search(s)
+    if match and match.group(0):
+        seconds  = 0
+        seconds += int(match.group(1) or "0") * SECONDS_WEEKS
+        seconds += int(match.group(2) or "0") * SECONDS_DAYS
+        seconds += int(match.group(3) or "0") * SECONDS_HOURS
+        seconds += int(match.group(4) or "0") * SECONDS_MINUTES
+        return seconds
+    else:
+        return None

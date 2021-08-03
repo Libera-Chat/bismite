@@ -4,7 +4,7 @@ from time        import time
 from typing      import Dict, List, Optional, Tuple
 import aiosqlite
 
-from .common import MaskDetails, MaskAction
+from .common import MaskAction, mtype_tostring
 
 # schema, also in make-database.sql
 #
@@ -13,9 +13,10 @@ from .common import MaskDetails, MaskAction
 #   mask:     str not null
 #   type:     int not null
 #   enabled:  bool not null
+#   expire:   int
 #   reason:   str
 #   hits:     int not null
-#   last_hit: int
+#   last_hit: int not null
 # primary key id
 #
 # changes:
@@ -29,6 +30,15 @@ from .common import MaskDetails, MaskAction
 #   value: str not null
 # primary key key
 
+@dataclass
+class MaskDetails(object):
+    type:     int
+    enabled:  bool
+    expire:   Optional[int]
+    reason:   Optional[str]
+    hits:     int
+    last_hit: int
+
 class Table(object):
     def __init__(self, db_location: str):
         self._db_location = db_location
@@ -40,9 +50,10 @@ class Masks(Table):
 
         async with aiosqlite.connect(self._db_location) as db:
             await db.execute("""
-                INSERT INTO masks (mask, type, enabled, reason, hits)
-                VALUES (?, ?, 1, ?, 0)
-            """, [mask, MaskAction.WARN.value, reason])
+                INSERT INTO masks
+                (mask, type, enabled, reason, hits, last_hit)
+                VALUES (?, ?, 1, ?, 0, ?)
+            """, [mask, MaskAction.WARN.value, reason, int(time())])
             await db.commit()
 
             cursor = await db.execute("""
@@ -68,16 +79,17 @@ class Masks(Table):
 
         async with aiosqlite.connect(self._db_location) as db:
             cursor = await db.execute("""
-                SELECT mask, type, enabled, reason, hits, last_hit
+                SELECT mask, type, enabled, expire, reason, hits, last_hit
                 FROM masks
                 WHERE id=?
             """, [mask_id])
 
             row = await cursor.fetchone()
-            mask, mtype, enabled, reason, hits, last_hit = row
+            mask, mtype, enabled, expire, reason, hits, last_hit = row
             details = MaskDetails(
                 mtype,
                 enabled,
+                expire,
                 reason,
                 hits,
                 last_hit
@@ -113,6 +125,18 @@ class Masks(Table):
                 SET type=?
                 WHERE id=?
             """, [mtype, mask_id])
+            await db.commit()
+
+    async def set_expire(self,
+            mask_id: int,
+            expire:  Optional[int]):
+
+        async with aiosqlite.connect(self._db_location) as db:
+            await db.execute("""
+                UPDATE masks
+                SET expire=?
+                WHERE id=?
+            """, [expire, mask_id])
             await db.commit()
 
     async def hit(self, mask_id: int):

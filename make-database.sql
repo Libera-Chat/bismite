@@ -5,9 +5,10 @@ CREATE TABLE masks (
     mask     TEXT NOT NULL,
     type     INTEGER NOT NULL,
     enabled  INTEGER NOT NULL,
+    expire   INTEGER,
     reason   TEXT,
     hits     INTEGER NOT NULL,
-    last_hit INTEGER
+    last_hit INTEGER NOT NULL
 );
 CREATE TABLE changes (
     mask_id   INTEGER NOT NULL,

@@ -1,6 +1,6 @@
-import asyncio, re, time
+import asyncio, re
 from datetime import datetime
-from time     import monotonic
+from time     import monotonic, time
 from typing   import List, Optional, Tuple
 
 from irctokens import build
@@ -9,7 +9,7 @@ from ircrobots import Bot, Server
 from ircstates.numerics import *
 from ircrobots.matching import ANY, Folded, Response, SELF
 
-from .common   import Event
+from .common   import Event, mtype_getaction, mtype_tostring, MaskAction
 from .database import Database
 
 SEND_DELAY = 10.0
@@ -52,5 +52,58 @@ async def delayed_check(
                 else:
                     wait = due-now
                     break
+
+        await asyncio.sleep(wait)
+
+async def expire_masks(
+        bot: Bot,
+        db:  Database):
+
+    while True:
+        now  = int(time())
+        wait = 60.0
+
+        if not bot.servers:
+            await asyncio.sleep(wait)
+            continue
+
+        server = list(bot.servers.values())[0]
+        source = f"{server.nickname}!{server.username}@{server.hostname}"
+        for mask_id in list(server.active_masks.keys()):
+            mask, details = await db.masks.get(mask_id)
+
+            if details.expire is None:
+                # no expiry
+                continue
+            elif details.expire < 0:
+                # expire relative to last hit time
+                expire = details.last_hit + abs(details.expire)
+            else:
+                expire = details.expire
+
+            if expire > now:
+                # not yet expired
+                wait = min(wait, expire-now)
+                continue
+
+            # has expired
+            mtype_action = mtype_getaction(details.type)
+            mtype_str    = mtype_tostring(details.type)
+            if mtype_action in {MaskAction.KILL, MaskAction.LETHAL}:
+                # downgrade to WARN
+                await db.masks.set_type(source, '', mask_id, MaskAction.WARN)
+                await db.changes.add(mask_id, source, '', "expire to WARN")
+                await server.report(
+                    f"MASK:EXPIRE: \x02{mask}\x02 {mtype_str} -> WARN"
+                )
+            else:
+                # downgrade to disabled
+                await db.masks.set_expire(mask_id, None)
+                await db.masks.toggle(mask_id)
+                await db.changes.add(mask_id, source, '', "expire")
+                del server.active_masks[mask_id]
+                await server.report(
+                    f"MASK:EXPIRE: \x02{mask}\x02 {mtype_str}"
+                )
 
         await asyncio.sleep(wait)

@@ -3,12 +3,14 @@ from argparse import ArgumentParser
 
 from ircrobots import ConnectionParams, SASLUserPass
 
-from .       import Bot
-from .config import Config, load as config_load
-from .timers import delayed_send, delayed_check
+from .         import Bot
+from .config   import Config, load as config_load
+from .database import Database
+from .timers   import delayed_send, delayed_check, expire_masks
 
 async def main(config: Config):
-    bot = Bot(config)
+    db  = Database(config.database)
+    bot = Bot(config, db)
 
     host, port, tls      = config.server
     sasl_user, sasl_pass = config.sasl
@@ -28,6 +30,7 @@ async def main(config: Config):
     await asyncio.wait([
         delayed_send(bot),
         delayed_check(bot),
+        expire_masks(bot, db),
         bot.run()
     ])
 
