@@ -714,6 +714,7 @@ class Server(BaseServer):
 
         outs: List[str] = []
         for match in matches[:max]:
+            match = match.replace("\n", "#")
             outs.append(f" {match}")
 
         if outs:
