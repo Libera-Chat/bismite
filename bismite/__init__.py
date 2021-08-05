@@ -725,7 +725,11 @@ class Server(BaseServer):
             outs.insert(0, f"mask \x02{mask}\x02 matches 0 out of {samples}")
         return outs
 
-    async def cmd_compilemask(self, oper: Optional[str], nick: str, args: str):
+    async def cmd_compilemask(self,
+            caller: Caller,
+            args:   str
+            ) -> List[str]:
+
         try:
             mask, args = mask_token(args)
             cmask      = mask_compile(mask)
