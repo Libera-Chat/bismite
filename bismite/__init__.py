@@ -467,7 +467,7 @@ class Server(BaseServer):
 
     @usage("/<regex>/ <public reason>[|<oper reason>]")
     @usage('"<string>" <public reason>[|<oper reason>]')
-    @usage('@<glob>@ <public reason>[|<oper reason>]')
+    @usage('%<glob>% <public reason>[|<oper reason>]')
     async def cmd_addmask(self,
             caller: Caller,
             args:   str

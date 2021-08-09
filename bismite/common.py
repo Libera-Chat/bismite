@@ -139,7 +139,7 @@ def mask_compile(mask: str) -> Pattern:
             mask = f"^{mask}"
         if "$" in flags:
             mask = f"{mask}$"
-    elif delim == "@": # what's a better char?
+    elif delim == "%": # what's a better char?
         # glob
         mask = glob_translate(mask)
         mask = fr"\A{mask}"
