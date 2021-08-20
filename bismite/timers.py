@@ -91,7 +91,7 @@ async def expire_masks(
             mtype_str    = mtype_tostring(details.type)
             if mtype_action in {MaskAction.KILL, MaskAction.LETHAL}:
                 # downgrade to WARN
-                await db.masks.set_type(source, '', mask_id, MaskAction.WARN)
+                await db.masks.set_type(mask_id, MaskAction.WARN)
                 await db.changes.add(mask_id, source, '', "expire to WARN")
                 await server.report(
                     f"MASK:EXPIRE: \x02{mask}\x02 {mtype_str} -> WARN"
