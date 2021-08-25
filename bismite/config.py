@@ -12,7 +12,9 @@ class Config(object):
     username: str
     realname: str
     password: str
+    antiidle: bool
     channel:  str
+    history:  int
     database: str
 
     sasl: Tuple[str, str]
@@ -22,7 +24,6 @@ class Config(object):
     cliconnre: Pattern
     cliexitre: Pattern
     clinickre: Pattern
-    antiidle:  bool
 
 def load(filepath: str):
     with open(filepath) as file:
@@ -55,7 +56,9 @@ def load(filepath: str):
         config_yaml.get("username", nickname),
         config_yaml.get("realname", nickname),
         config_yaml["password"],
+        config_yaml["antiidle"],
         config_yaml["channel"],
+        config_yaml["history"],
         expanduser(config_yaml["database"]),
         (config_yaml["sasl"]["username"], config_yaml["sasl"]["password"]),
         (oper_name, oper_pass, oper_file),
@@ -63,5 +66,4 @@ def load(filepath: str):
         cliconnre,
         cliexitre,
         clinickre,
-        config_yaml["antiidle"],
     )

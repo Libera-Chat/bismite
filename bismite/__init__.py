@@ -29,8 +29,6 @@ RPL_ENDOFRSACHALLENGE2 = "741"
 RPL_WHOISOPERATOR      = "313"
 RPL_YOUREOPER          = "381"
 
-MAX_RECENT = 1000
-
 RE_OPERNAME = re.compile(r"^is opered as (\S+)(?:,|$)")
 
 @dataclass
@@ -182,7 +180,7 @@ class Server(BaseServer):
             references.append(f"{uflags}{ni}!{us}@{ip} {re}")
 
         self._recent_masks.append(references)
-        if len(self._recent_masks) > MAX_RECENT:
+        if len(self._recent_masks) > self._config.history:
             self._recent_masks.popleft()
 
         matches: List[int] = []
@@ -499,7 +497,7 @@ class Server(BaseServer):
         # check/warn about how many users this will hit
         matches = 0
         samples = 0
-        for i in range(MAX_RECENT):
+        for i in range(self._config.history):
             if i == len(self._recent_masks):
                 break
             samples += 1
@@ -697,11 +695,11 @@ class Server(BaseServer):
 
         max = 10
         if args.strip() == "-all":
-            max = MAX_RECENT
+            max = self._config.history
 
         samples = 0
         matches: List[str] = []
-        for i in range(MAX_RECENT):
+        for i in range(self._config.history):
             if i == len(self._recent_masks):
                 break
             samples += 1
