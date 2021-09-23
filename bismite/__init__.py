@@ -136,15 +136,18 @@ class Server(BaseServer):
 
         formats = self._reasons.copy()
         formats.update(extras)
+        # sort keys by length backwards
+        # "$user_reason" will match $user if we don't
+        fkeys   = sorted(formats.keys(), key=len, reverse=True)
 
         # expand reason templates
         for i in range(10):
             changed = False
-            for k, v in formats.items():
-                k = f"${k}"
-                if k in string:
+            for key in fkeys:
+                fkey = f"${key}"
+                if fkey in string:
                     changed = True
-                    string = string.replace(k, v)
+                    string = string.replace(fkey, formats[key])
             if not changed:
                 # don't keep going if nothing changes
                 break
