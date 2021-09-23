@@ -218,31 +218,35 @@ class Server(BaseServer):
             mask_id, (mask, d) = matches[0]
             mtype_action       = mtype_getaction(d.type)
 
-            ident  = user.user
-            # if the user doesn't have identd, bin the whole host
-            if ident.startswith("~"):
-                ident = "*"
+            user_reason, _, oper_reason = d.reason.partition("|")
 
-            # format reason $aliases
-            reason = self._format(d.reason, {
-                "mask_id": str(mask_id)
-            })
-
-            user_reason, _, oper_reason = reason.partition("|")
+            # computed "optimal" values for user@host k-line mask
+            ban_user = user.user
+            if ban_user.startswith("~"):
+                ban_user = "*"
+            ban_host = user.host
+            if user.ip is not None:
+                ban_host = user.ip
 
             info = {
-                "ident":  ident,
-                "user":   user,
-                "reason": reason,
-                "rand":   randint(160, 320),
                 "mask_id":     str(mask_id),
+                "nick":        nick,
+                "user":        user.user,
+                "host":        user.host,
+                "ip":          user.ip,
+
+                "ban_user":    ban_user,
+                "ban_host":    ban_host,
+                "ban_time":    str(randint(160, 320)),
+
+                "reason":      d.reason,
                 "user_reason": user_reason,
                 "oper_reason": oper_reason
             }
 
             action: Optional[str] = None
             if   mtype_action == MaskAction.LETHAL:
-                action = self._config.bancmd.format(**info)
+                action = self._format(self._config.bancmd, info)
             elif mtype_action == MaskAction.KILL:
                 action = f"KILL {nick} :{user_reason}"
 
