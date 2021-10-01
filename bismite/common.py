@@ -1,10 +1,12 @@
-import re
+import re, string
 from dataclasses import dataclass
 from enum        import Enum, IntEnum, IntFlag
 from fnmatch     import translate as glob_translate
 from typing      import Any, Dict, Pattern, Optional, Set, Tuple
 
 from ircrobots.formatting import strip as format_strip
+
+FLAG_CHARS = set("AaiNnZz^$")
 
 @dataclass
 class User(object):
@@ -125,19 +127,27 @@ def _maskflag_match(
 def mask_compile(mask: str) -> Pattern:
     delim       = mask[0]
     mask_end    = _find_unescaped(mask, delim)
-    mask, flags = mask[1:mask_end-1], set(mask[mask_end:])
+    mask, flags = mask[1:mask_end-1], mask[mask_end:]
+    flags_s     = set(flags)
 
     if not mask:
         # empty string
         raise ValueError("empty mask provided")
 
+    flags_invalid = list(flags_s - FLAG_CHARS)
+    # error should complain about them in the order they're present
+    flags_invalid.sort(key=flags.index)
+    if flags_invalid:
+        flags_invalid_s = "".join(flags_invalid)
+        raise ValueError(f"unknown flags '{flags_invalid_s}'")
+
     if delim in {"\"", "'"}:
         # string literal
         mask = _unescape(mask, delim)
         mask = re.escape(mask)
-        if "^" in flags:
+        if "^" in flags_s:
             mask = f"^{mask}"
-        if "$" in flags:
+        if "$" in flags_s:
             mask = f"{mask}$"
     elif delim == "%": # what's a better char?
         # glob
@@ -155,14 +165,14 @@ def mask_compile(mask: str) -> Pattern:
 
     mask = "".join([
         "^",
-        _maskflag_match(flags, {'': ".", "A": "0", "a": "1"}),
-        _maskflag_match(flags, {'': ".", "Z": "0", "z": "1"}),
-        _maskflag_match(flags, {'': "0", "N": "."}),
+        _maskflag_match(flags_s, {'': ".", "A": "0", "a": "1"}),
+        _maskflag_match(flags_s, {'': ".", "Z": "0", "z": "1"}),
+        _maskflag_match(flags_s, {'': "0", "N": "."}),
         r"\n.*"
     ]) + mask
 
     re_flags = re.MULTILINE
-    if "i" in flags:
+    if "i" in flags_s:
         re_flags |= re.IGNORECASE
 
     return re.compile(mask, re_flags)
