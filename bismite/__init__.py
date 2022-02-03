@@ -442,7 +442,7 @@ class Server(BaseServer):
             sargs:  str
             ) -> List[str]:
 
-        args = sargs.split(None, 1)
+        args = sargs.split(None, 2)
         if not args:
             raise UsageError("please provide a mask id")
         elif not args[0].isdigit():
@@ -454,20 +454,23 @@ class Server(BaseServer):
         mask, d = await self._database.masks.get(mask_id)
         changes = await self._database.changes.get(mask_id)
 
-        outs = [self._mask_format(mask_id, mask, d)]
-        if changes:
-            outs.append("\x02changes:\x02")
-            for who_nick, who_oper, ts, change in changes:
-                if who_oper is not None:
-                    who = f"{who_nick} ({who_oper})"
-                else:
-                    who = f"{who_nick}"
-                tss = datetime.utcfromtimestamp(ts).isoformat()
-                outs.append(
-                    f" {tss}"
-                    f" by \x02{who}\x02:"
-                    f" {change}"
-                )
+        outs = [
+            self._mask_format(mask_id, mask, d),
+            "\x02changes:\x02"
+        ]
+
+        change_max = len(changes) if "-all" in args else 10
+        for who_nick, who_oper, ts, change in changes[-change_max:]:
+            if who_oper is not None:
+                who = f"{who_nick} ({who_oper})"
+            else:
+                who = f"{who_nick}"
+            tss = datetime.utcfromtimestamp(ts).isoformat()
+            outs.append(
+                f" {tss}"
+                f" by \x02{who}\x02:"
+                f" {change}"
+            )
         return outs
 
     @usage("/<regex>/ <public reason>[|<oper reason>]")
