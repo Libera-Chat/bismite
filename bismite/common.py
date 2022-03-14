@@ -24,6 +24,7 @@ class MaskAction(IntEnum):
     WARN    = 1
     LETHAL  = 2
     EXCLUDE = 4
+    RESV    = 5
 class MaskModifier(IntFlag):
     NONE   = 0
     DELAY  = 0b001 << 4
@@ -63,6 +64,7 @@ def mtype_tostring(mtype: int) -> str:
 
 MASK_SORT = [
     MaskAction.WARN,
+    MaskAction.RESV,
     MaskAction.KILL,
     MaskAction.LETHAL,
     MaskAction.EXCLUDE
