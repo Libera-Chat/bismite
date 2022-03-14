@@ -212,7 +212,7 @@ class Server(BaseServer):
             types   = {d.type for i, (m, d) in matches}
 
             # sort by mask type, descending
-            # this should order: exclude, dlethal, lethal, kill, warn
+            # this should order: exclude, lethal, kill, resv, warn
             matches.sort(
                 key=lambda m: mtype_weight(m[1][1].type),
                 reverse=True
@@ -252,6 +252,8 @@ class Server(BaseServer):
                 action = self._format(self._config.bancmd, info)
             elif mtype_action == MaskAction.KILL:
                 action = f"KILL {nick} :{user_reason}"
+            elif mtype_action == MaskAction.RESV:
+                action = f"RESV 60 {nick} :bismite mask {mask_id}"
 
             if action is None:
                 pass
