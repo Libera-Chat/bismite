@@ -253,7 +253,7 @@ class Server(BaseServer):
             elif mtype_action == MaskAction.KILL:
                 action = f"KILL {nick} :{user_reason}"
             elif mtype_action == MaskAction.RESV:
-                action = f"RESV 60 {nick} :bismite mask {mask_id}"
+                action = f"RESV 60 {nick} ON * :bismite mask {mask_id}"
 
             if action is None:
                 pass
