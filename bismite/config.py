@@ -14,6 +14,7 @@ class Config(object):
     password: str
     antiidle: bool
     channel:  str
+    verbose:  str
     history:  int
     database: str
 
@@ -58,6 +59,7 @@ def load(filepath: str):
         config_yaml["password"],
         config_yaml["antiidle"],
         config_yaml["channel"],
+        config_yaml["verbose"],
         config_yaml["history"],
         expanduser(config_yaml["database"]),
         (config_yaml["sasl"]["username"], config_yaml["sasl"]["password"]),

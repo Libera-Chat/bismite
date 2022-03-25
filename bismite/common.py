@@ -29,6 +29,7 @@ class MaskModifier(IntFlag):
     NONE   = 0
     DELAY  = 0b001 << 4
     SILENT = 0b010 << 4
+    QUIET  = 0b100 << 4
 
 def mtype_getaction(
         mtype: int
@@ -60,6 +61,8 @@ def mtype_tostring(mtype: int) -> str:
         parts.append("DELAY")
     if mtype & MaskModifier.SILENT:
         parts.append("SILENT")
+    if mtype & MaskModifier.QUIET:
+        parts.append("QUIET")
     return "|".join(parts)
 
 MASK_SORT = [
