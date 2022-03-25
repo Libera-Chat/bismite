@@ -262,20 +262,26 @@ class Server(BaseServer):
             else:
                 await self.send_raw(action)
 
+            mtype_str = mtype_tostring(d.type)
+            output = (f"MASK: {mtype_str} mask {mask_id} "
+                f"{nick}!{user.user}@{user.host} {user.real}")
             if (mtype_action == MaskAction.EXCLUDE and
                     len(types) == 1):
                 # we matched an EXCLUDE but no other types.
                 # do not log
                 pass
+            elif d.type & MaskModifier.QUIET:
+                await self._verbose(output)
             elif not d.type & MaskModifier.SILENT:
-                mtype_str = mtype_tostring(d.type)
-                await self.report(
-                    f"MASK: {mtype_str} mask {mask_id} "
-                    f"{nick}!{user.user}@{user.host} {user.real}"
-                )
+                await self._verbose(output)
+                await self.report(output)
 
+    async def _report(self, channel: str, message: str):
+        await self.send(build("PRIVMSG", [channel, message]))
     async def report(self, message: str):
-        await self.send(build("PRIVMSG", [self._config.channel, message]))
+        await self._report(self._config.channel, message)
+    async def _verbose(self, message: str):
+        await self._report(self._config.verbose, message)
 
     async def line_read(self, line: Line):
         if line.command == RPL_WELCOME:

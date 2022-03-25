@@ -2,6 +2,7 @@ server: irc.libera.chat:+6697
 nickname: bismite
 password: bismite:hunter2
 channel:  "#libera-masks"
+verbose: "#libera-masks-verbose"
 history:  100_000
 antiidle: True
 database: ~/.masks.db
