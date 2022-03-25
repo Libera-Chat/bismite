@@ -274,7 +274,8 @@ class Server(BaseServer):
                 await self._verbose(output)
             elif not d.type & MaskModifier.SILENT:
                 await self._verbose(output)
-                await self.report(output)
+                if not self._config.channel == self._config.verbose:
+                    await self.report(output)
 
     async def _report(self, channel: str, message: str):
         await self.send(build("PRIVMSG", [channel, message]))
