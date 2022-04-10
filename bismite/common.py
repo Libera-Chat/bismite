@@ -154,7 +154,7 @@ def mask_compile(mask: str) -> Pattern:
     elif delim == "%": # what's a better char?
         # glob
         mask = glob_translate(mask)
-        mask = fr"\A{mask}"
+        mask = fr"^{mask}"
 
     # we somewhat abuse re.MULTILINE so we can match arbitrary characteristics
     # about users by putting flags before their `nick!user@host real`
