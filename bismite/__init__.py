@@ -502,11 +502,6 @@ class Server(BaseServer):
             raise UsageError("please provide a mask reason")
 
         reason = args
-        # if there's no explicit oper reason, assume this
-        # is an oper reason. safer than assuming public.
-        if not "|" in reason:
-            reason = f"|{reason}"
-
         mask_id = await self._database.masks.add(mask, reason)
         await self._database.changes.add(
             mask_id, caller.source, caller.oper, "add"
