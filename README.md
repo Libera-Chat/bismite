@@ -61,7 +61,7 @@ delimiters on `/<regex>/` can be any non-alphanumeric character, e.g.
 
 ### SETMASK
 ```
-/msg bismite setmask <id> WARN|LETHAL|DLETHAL|EXCLUDE
+/msg bismite setmask <id> [WARN|RESV|KILL|LETHAL|EXCLUDE]
 ```
 
 ### TOGGLEMASK
