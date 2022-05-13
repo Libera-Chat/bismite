@@ -52,6 +52,8 @@ $ python3 -m bismite config.yaml
 ### ADDMASK
 ```
 /msg bismite addmask /<regex>/ <reason>[|<oper reason>]
+/msg bismite addmask %<glob>% <reason>[|<oper reason>]
+/msg bismite addmask "<substring>" <reason>[|<oper reason>]
 ```
 
 delimiters on `/<regex>/` can be any non-alphanumeric character, e.g.
