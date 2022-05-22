@@ -26,8 +26,12 @@ $ python3 -m bismite config.yaml
 <jess> listreason
 -bismite- $spam: Spam is not welcome on Libera Chat. Email $email with questions.
 -bismite- $email: bans@libera.chat
+<jess> testmask /^jesstest!/
+-bismite- mask /^jesstest!/ matches...
+-bismite-  010#jesstest!~j@sandcat.libera.chat j
+-bismite- ... out of 7
 <jess> addmask /^jesstest!/ $spam|!dnsbl
--bismite- added 1
+-bismite- added 1 (hits 1 out of last 8 users)
 <jess> listmask
 -bismite-   1: /^jesstest!/ (0 hits) WARN [$spam|!dnsbl]
 <jess> setmask 1 lethal
@@ -41,9 +45,15 @@ $ python3 -m bismite config.yaml
 
 ## commands
 
+### TESTMASK
+```
+/msg bismite testmask /<regex>/
+
 ### ADDMASK
 ```
 /msg bismite addmask /<regex>/ <reason>[|<oper reason>]
+/msg bismite addmask %<glob>% <reason>[|<oper reason>]
+/msg bismite addmask "<substring>" <reason>[|<oper reason>]
 ```
 
 delimiters on `/<regex>/` can be any non-alphanumeric character, e.g.
@@ -51,7 +61,7 @@ delimiters on `/<regex>/` can be any non-alphanumeric character, e.g.
 
 ### SETMASK
 ```
-/msg bismite setmask <id> WARN|LETHAL|DLETHAL|EXCLUDE
+/msg bismite setmask <id> [WARN|RESV|KILL|LETHAL|EXCLUDE]
 ```
 
 ### TOGGLEMASK
