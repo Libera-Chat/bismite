@@ -69,7 +69,7 @@ class Server(BaseServer):
         self.delayed_send: Deque[Tuple[int, str]] = deque()
 
         self.to_check: Deque[Tuple[float, str, User]] = deque()
-        self._nick_change_whois: Deque[str] = deque()
+        self._nick_change_whois: Deque[Tuple[str, bool]] = deque() # nick, should_check
 
     def set_throttle(self, rate: int, time: float):
         # turn off throttling
@@ -321,8 +321,9 @@ class Server(BaseServer):
         elif line.command == RPL_ENDOFWHOIS:
             nick = line.params[1]
             if (self._nick_change_whois and
-                    self._nick_change_whois[0] == nick):
+                    self._nick_change_whois[0][0] == nick):
 
+                should_check = self._nick_change_whois[0][1]
                 self._nick_change_whois.popleft()
 
                 # this should be safe.
@@ -338,7 +339,9 @@ class Server(BaseServer):
 
                 if nick in self._users:
                     user = self._users[nick]
-                    await self.mask_check(nick, user, Event.NICK)
+
+                    if should_check:
+                        await self.mask_check(nick, user, Event.NICK)
 
         elif (line.command == "PRIVMSG" and
                 not self.is_me(line.hostmask.nickname) and
@@ -395,8 +398,17 @@ class Server(BaseServer):
                 if old_nick in self._users:
                     user = self._users.pop(old_nick)
                     self._users[new_nick] = user
+
+                    # if the new nickname is a UID (because they were resv'd or collided),
+                    # it is not necessary to check them
+                    # only checking for a number in the first part of the nick is ok here
+                    # because a nick cannot normally be this way except in the conditions mentioned above
+                    # ~launchd 7/7/2022
+                    should_check = not new_nick[0].isdigit()
+
                     # refresh what we think this user's account is
-                    self._nick_change_whois.append(new_nick)
+                    # and trigger a check if needed
+                    self._nick_change_whois.append((new_nick, should_check))
                     user.account = None
                     await self.send(build("WHOIS", [new_nick]))
 
