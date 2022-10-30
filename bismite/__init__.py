@@ -295,7 +295,6 @@ class Server(BaseServer):
             for key, value in await self._database.reasons.list():
                 self._reasons[key] = value
 
-            await self.send(build("MODE", [self.nickname, "+g"]))
             oper_name, oper_pass, oper_file = self._config.oper
             await self._oper_up(oper_name, oper_pass, oper_file)
 
