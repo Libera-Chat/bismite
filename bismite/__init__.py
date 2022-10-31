@@ -1,7 +1,8 @@
-import asyncio, re, traceback
+import asyncio, random, re, traceback
 from collections import deque, OrderedDict
 from dataclasses import dataclass
 from datetime    import datetime
+from heapq       import heappush
 from random      import randint
 from time        import monotonic, time
 from typing      import Any, Deque, Dict, List, Optional, Tuple
@@ -66,7 +67,7 @@ class Server(BaseServer):
         self.active_masks:    TOrderedDict[int, Pattern] = OrderedDict()
         self._reasons:        Dict[str, str] = {}
 
-        self.delayed_send: Deque[Tuple[int, str]] = deque()
+        self.delayed_send: List[Tuple[int, str]] = []
 
         self.to_check: Deque[Tuple[float, str, User]] = deque()
         self._nick_change_whois: Deque[str] = deque()
@@ -258,7 +259,13 @@ class Server(BaseServer):
             if action is None:
                 pass
             elif d.type & MaskModifier.DELAY:
-                self.delayed_send.append((monotonic(), action))
+                when = monotonic()
+                if d.type & MaskModifier.QUICK:
+                    when += 3
+                else:
+                    when += random.uniform(1,10)
+
+                heappush(self.delayed_send, (when, action))
             else:
                 await self.send_raw(action)
 

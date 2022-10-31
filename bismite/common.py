@@ -27,9 +27,10 @@ class MaskAction(IntEnum):
     RESV    = 5
 class MaskModifier(IntFlag):
     NONE   = 0
-    DELAY  = 0b001 << 4
-    SILENT = 0b010 << 4
-    QUIET  = 0b100 << 4
+    DELAY  = 0b0001 << 4
+    SILENT = 0b0010 << 4
+    QUIET  = 0b0100 << 4
+    QUICK  = 0b1000 << 4
 
 def mtype_getaction(
         mtype: int
@@ -63,6 +64,8 @@ def mtype_tostring(mtype: int) -> str:
         parts.append("SILENT")
     if mtype & MaskModifier.QUIET:
         parts.append("QUIET")
+    if mtype & MaskModifier.QUICK:
+        parts.append("QUICK")
     return "|".join(parts)
 
 MASK_SORT = [
