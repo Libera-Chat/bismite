@@ -1,5 +1,6 @@
 import asyncio, re
 from datetime import datetime
+from heapq    import heappop
 from time     import monotonic, time
 from typing   import List, Optional, Tuple
 
@@ -12,21 +13,17 @@ from ircrobots.matching import ANY, Folded, Response, SELF
 from .common   import Event, mtype_getaction, mtype_tostring, MaskAction
 from .database import Database
 
-SEND_DELAY = 10.0
-
 async def delayed_send(bot: Bot):
     while True:
-        now  = monotonic()
-        next = SEND_DELAY - (now%SEND_DELAY)
-        await asyncio.sleep(next)
-        now += next
+        await asyncio.sleep(0.1)
 
         if bot.servers:
             server = list(bot.servers.values())[0]
+            now = monotonic()
             while server.delayed_send:
                 when, sline = server.delayed_send[0]
-                if now-when >= SEND_DELAY:
-                    server.delayed_send.popleft()
+                if when <= now:
+                    heappop(server.delayed_send)
                     await server.send_raw(sline)
                 else:
                     break
