@@ -1,9 +1,8 @@
 # bismite
 
-IRC `nick!user@host real` watcher, akin to Atheme's OperServ `RWATCH`.
+IRC mask watcher, akin to Atheme's OperServ `RWATCH`.
 
 ## setup
-
 ```
 $ cp config.example.yaml config.yaml
 $ vim config.yaml
@@ -11,13 +10,11 @@ $ sqlite3 ~/.masks.db < make-database.sql
 ```
 
 ## running
-
 ```
 $ python3 -m bismite config.yaml
 ```
 
-## quick usage examples
-
+## quick usage examples=
 ```
 <jess> addreason spam Spam is not welcome on Libera Chat. Email $email with questions.
 -bismite- added $spam
@@ -27,7 +24,7 @@ $ python3 -m bismite config.yaml
 -bismite- $spam: Spam is not welcome on Libera Chat. Email $email with questions.
 -bismite- $email: bans@libera.chat
 <jess> addmask /^jesstest!/ $spam|!dnsbl
--bismite- added 1
+-bismite- added 1 (hits 1 out of last 8 users)
 <jess> listmask
 -bismite-   1: /^jesstest!/ (0 hits) WARN [$spam|!dnsbl]
 <jess> setmask 1 lethal
@@ -43,67 +40,108 @@ $ python3 -m bismite config.yaml
 
 ### ADDMASK
 ```
-/msg bismite addmask /<regex>/ <reason>[|<oper reason>]
+/msg bismite addmask /<regex>/[<flags>] <reason>[|<oper reason>]
+/msg bismite addmask %<glob>%[<flags>] <reason>[|<oper reason>]
+/msg bismite addmask "<string>"[<flags>] <reason>[|<oper reason>]
 ```
 
-delimiters on `/<regex>/` can be any non-alphanumeric character, e.g.
-`,<regex>,`
+Adds a "mask", a pattern that will be tested against new connections' masks
+(formatted as `nick!user@host realname`).
+By default, all new masks are `WARN` masks.
+
+The delimiters on `/<regex>/` can be any non-alphanumeric character, e.g. `,<regex>,`.
+bismite's regex syntax can be found [here](https://docs.python.org/3/library/re.html#regular-expression-syntax).
+
+`flags` is an optional sequence of [flag characters](#mask-flags)
+that further controls how the provided pattern matches.
+
+`reason` is the publicly-visible reason for any actions (e.g. K-lines) taken by bismite.
+`oper-reason` is private.
+
+This command will return an integer ID for the newly-added mask,
+which should be used in any commands with an `<id>` parameter.
 
 ### SETMASK
 ```
-/msg bismite setmask <id> WARN|LETHAL|DLETHAL|EXCLUDE
+/msg bismite setmask <id> <mask-type>
 ```
+
+Changes the action taken when a mask matches. See [mask types](#mask-types).
+
+Lists all masks and their IDs.
 
 ### TOGGLEMASK
 ```
 /msg bismite togglemask <id>
 ```
 
+Enables or disables a mask.
+
+### LISTMASK
+```
+/msg bismite listmask
+```
+
+Lists all masks and their IDs.
+
+### GETMASK
+```
+/msg bismite getmask <id>
+```
+
+Gets detailed information about a mask, including a log of changes to it and who made them.
+
 ### ADDREASON
 ```
 /msg bismite addreason <alias> <text>
 ```
-adds a reason template that can be used in mask reasons (see above example)
+
+Adds a reason template.
+In mask reasons, `$alias` will be replaced with `text`.
 
 ### DELREASON
 ```
 /msg bismite delreason <alias>
 ```
 
+Deletes a reason template.
+
 ### LISTREASON
 ```
 /msg bismite listreason
 ```
 
+Lists all reason templates.
+
 ## mask types
 
-### WARN
+Every mask type is made up of one action and zero or more modifiers separated by `|`,
+e.g. `LETHAL|DELAY|QUICK`.
 
-Prints a line to channel configured in `config.yaml` to tell you that someone
-matched the pattern.
+By default, every action except `EXCLUDE` is logged to two channels,
+both of which are configured in `config.yaml` as `channel` and `verbose`.
 
-### KILL
+The actions are as follows:
+* `WARN`: Does nothing except send a warning message to the channel.
+* `RESV`: Applies a temporary `RESV` with the user's nick.
+* `KILL`: Disconnects the user using a `KILL` command.
+* `LETHAL`: Bans the user using the `bancmd` in `config.yaml`.
+* `EXCLUDE`: Does nothing. Takes priority over other mask types,
+preventing them from matching.
 
-Same as `WARN`, but also issues a `/kill` for the user.
-
-### LETHAL
-
-Same as `WARN`, but also k-lines the user.
-
-### DLETHAL
-
-Same as `LETHAL`, but the k-line is delayed a bit.
-
-### EXCLUDE
-
-Same as `WARN`, but is seen as more "important" than other mask types, and
-will thus prevent people matching it from matching e.g. `LETHAL` masks.
+The modifiers are as follows:
+* `DELAY`: Waits for a small random number of seconds before performing an action.
+* `QUICK`: When combined with `DELAY`, waits for a shorter-on-average and consistent duration before performing an action.
+* `QUIET`: Only logs to the verbose channel.
+* `SILENT`: Prevents logging to either channel.
 
 ## mask flags
-You can specify different flags to limit when a mask will be matched. For example to add mask flag `i`, use:
+
+You can specify different flags to limit when a mask will be matched. For example,
+to perform case-insensitive matching on connections without accounts, use:
 
 ```
-addmask /^beep!/i $spam|!dnsbl
+addmask /^beep!/iA $spam
 ```
 
 The mask flags are as follows:
