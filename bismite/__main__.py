@@ -12,26 +12,21 @@ async def main(config: Config):
     db  = Database(config.database)
     bot = Bot(config, db)
 
-    host, port, tls      = config.server
     sasl_user, sasl_pass = config.sasl
 
-    params = ConnectionParams(
-        config.nickname,
-        host,
-        port,
-        tls,
-        username=config.username,
-        realname=config.realname,
-        password=config.password,
-        sasl=SASLUserPass(sasl_user, sasl_pass),
-        autojoin=[config.channel, config.verbose]
-    )
-    await bot.add_server(host, params)
+    params = ConnectionParams.from_hoststring(config.nickname, config.server)
+    config.username = config.username,
+    config.realname = config.realname,
+    config.password = config.password,
+    config.sasl = SASLUserPass(sasl_user, sasl_pass),
+    config.autojoin = [config.channel, config.verbose]
+
+    await bot.add_server("irc", params)
     await asyncio.wait([
-        delayed_send(bot),
-        delayed_check(bot),
-        expire_masks(bot, db),
-        bot.run()
+        asyncio.create_task(delayed_send(bot)),
+        asyncio.create_task(delayed_check(bot)),
+        asyncio.create_task(expire_masks(bot, db)),
+        asyncio.create_task(bot.run())
     ])
 
 if __name__ == "__main__":
