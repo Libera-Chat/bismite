@@ -15,11 +15,11 @@ async def main(config: Config):
     sasl_user, sasl_pass = config.sasl
 
     params = ConnectionParams.from_hoststring(config.nickname, config.server)
-    config.username = config.username,
-    config.realname = config.realname,
-    config.password = config.password,
-    config.sasl = SASLUserPass(sasl_user, sasl_pass),
-    config.autojoin = [config.channel, config.verbose]
+    params.username = config.username
+    params.realname = config.realname
+    params.password = config.password
+    params.sasl = SASLUserPass(sasl_user, sasl_pass)
+    params.autojoin = [config.channel, config.verbose]
 
     await bot.add_server("irc", params)
     await asyncio.wait([
