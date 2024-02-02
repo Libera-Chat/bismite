@@ -271,7 +271,8 @@ class Server(BaseServer):
 
             mtype_str = mtype_tostring(d.type)
             output = (f"MASK: {mtype_str} mask {mask_id} "
-                f"{nick}!{user.user}@{user.host} {user.real}")
+                f"{nick}!{user.user}@{user.host} {user.real}"
+                f" [{oper_reason}]")
             if (mtype_action == MaskAction.EXCLUDE and
                     len(types) == 1):
                 # we matched an EXCLUDE but no other types.
