@@ -1,5 +1,5 @@
 aiosqlite    ~=0.17.0
 ircchallenge ~=0.1.2
 ircrobots    ~=0.6.6
-pyyaml       ~=5.4.1
+pyyaml       ~=6.0.1
 
