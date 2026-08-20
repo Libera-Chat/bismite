@@ -252,7 +252,7 @@ class Server(BaseServer):
             if   mtype_action == MaskAction.LETHAL:
                 action = self._format(self._config.bancmd, info)
             elif mtype_action == MaskAction.KILL:
-                action = f"KILL {nick} :{user_reason}"
+                action = self._format(f"KILL {nick} :$user_reason", info)
             elif mtype_action == MaskAction.RESV:
                 action = f"RESV 60 {nick} ON * :bismite mask {mask_id}"
 
